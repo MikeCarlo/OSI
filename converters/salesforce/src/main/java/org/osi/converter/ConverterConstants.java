@@ -20,7 +20,7 @@ public final class ConverterConstants {
 
     // OSI root structure
     public static final String VERSION = "version";
-    public static final String OSI_VERSION = "0.1.1";
+    public static final String OSI_VERSION = "0.2.0.dev0";
     public static final String SEMANTIC_MODEL = "semantic_model";
 
     // OSI semantic model structure

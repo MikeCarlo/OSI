@@ -31,7 +31,7 @@ from osi_to_snowflake_yaml_converter import (
 def _wrap_osi(model_dict):
     """Wrap a model dict in the standard OSI envelope."""
     return yaml.dump(
-        {"version": "0.1.1", "semantic_model": [model_dict]},
+        {"version": "0.2.0.dev0", "semantic_model": [model_dict]},
         default_flow_style=False,
     )
 
@@ -482,29 +482,29 @@ class TestConvertOsiToSnowflake:
             convert_osi_to_snowflake(bad)
 
     def test_missing_semantic_model_raises(self):
-        bad = yaml.dump({"version": "0.1.1"})
+        bad = yaml.dump({"version": "0.2.0.dev0"})
         with pytest.raises(OsiConversionError, match="non-empty list"):
             convert_osi_to_snowflake(bad)
 
     def test_empty_semantic_model_raises(self):
-        bad = yaml.dump({"version": "0.1.1", "semantic_model": []})
+        bad = yaml.dump({"version": "0.2.0.dev0", "semantic_model": []})
         with pytest.raises(OsiConversionError, match="non-empty list"):
             convert_osi_to_snowflake(bad)
 
     def test_non_dict_model_entry_raises(self):
-        bad = yaml.dump({"version": "0.1.1", "semantic_model": ["not a dict"]})
+        bad = yaml.dump({"version": "0.2.0.dev0", "semantic_model": ["not a dict"]})
         with pytest.raises(OsiConversionError, match="must be mappings"):
             convert_osi_to_snowflake(bad)
 
     def test_missing_model_name_raises(self):
-        bad = yaml.dump({"version": "0.1.1", "semantic_model": [{"description": "x"}]})
+        bad = yaml.dump({"version": "0.2.0.dev0", "semantic_model": [{"description": "x"}]})
         with pytest.raises(OsiConversionError, match="Missing required 'name'"):
             convert_osi_to_snowflake(bad)
 
     def test_multiple_models_warns(self):
         multi = yaml.dump(
             {
-                "version": "0.1.1",
+                "version": "0.2.0.dev0",
                 "semantic_model": [
                     _minimal_model(name="first"),
                     _minimal_model(name="second"),

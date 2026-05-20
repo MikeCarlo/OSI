@@ -1,4 +1,4 @@
-version: 0.1.1
+version: 0.2.0.dev0
 semantic_model:
   - name: Customer_Orders_Model
     description: Example model demonstrating calculated dimensions with single and multiple

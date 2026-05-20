@@ -80,12 +80,12 @@ class SalesforceToOsiConverterTest {
 
         String osiYaml = results.get(0);
         assertNotNull(osiYaml);
-        assertTrue(osiYaml.contains("version: 0.1.1"));
+        assertTrue(osiYaml.contains("version: 0.2.0.dev0"));
         assertTrue(osiYaml.contains("semantic_model:"));
 
         Map<String, Object> osiRoot = yamlMapper.readValue(osiYaml, Map.class);
         assertNotNull(osiRoot);
-        assertEquals("0.1.1", osiRoot.get("version"));
+        assertEquals("0.2.0.dev0", osiRoot.get("version"));
 
         List<Map<String, Object>> semanticModels = (List<Map<String, Object>>) osiRoot.get("semantic_model");
         assertNotNull(semanticModels);

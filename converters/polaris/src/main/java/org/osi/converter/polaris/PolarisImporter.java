@@ -30,7 +30,7 @@ public class PolarisImporter {
      */
     public OsiModel importCatalog() throws IOException, InterruptedException {
         OsiModel model = new OsiModel();
-        model.setVersion("0.1.1");
+        model.setVersion("0.2.0.dev0");
 
         List<List<String>> namespaces = client.listNamespaces();
 

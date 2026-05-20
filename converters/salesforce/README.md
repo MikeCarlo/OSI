@@ -111,7 +111,7 @@ osiToSf.convert(Paths.get("input/model.yaml"), Paths.get("output/"));
 - **Schema-validated** - Input is validated against JSON Schema before processing
 - **Lossless conversion** - Unmapped properties are preserved in `custom_extensions`
 - **Bidirectional** - Full bi-directional conversion without data loss
-- **Supports OSI Specification v0.1.1**
+- **Supports OSI Specification v0.2.0.dev0**
 
 ## Mapping Reference
 

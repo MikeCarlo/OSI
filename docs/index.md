@@ -26,7 +26,7 @@ OSI addresses semantic fragmentation by providing:
 
 ### Specification at a Glance
 
-The OSI core specification (current version: **0.1.1**) defines a YAML-based format for describing semantic models. The key constructs are:
+The OSI core specification (current version: **0.2.0.dev0**, latest released: **0.1.1**) defines a YAML-based format for describing semantic models. The key constructs are:
 
 | Construct | Description |
 |-----------|-------------|

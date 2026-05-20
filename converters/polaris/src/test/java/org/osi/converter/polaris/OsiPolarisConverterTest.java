@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class OsiPolarisConverterTest {
 
     private static final String MINIMAL_MODEL =
-            "version: \"0.1.1\"\n"
+            "version: \"0.2.0.dev0\"\n"
             + "\n"
             + "semantic_model:\n"
             + "  - name: test_model\n"
@@ -82,7 +82,7 @@ class OsiPolarisConverterTest {
         OsiModel model = parser.parse(
                 new ByteArrayInputStream(MINIMAL_MODEL.getBytes(StandardCharsets.UTF_8)));
 
-        assertEquals("0.1.1", model.getVersion());
+        assertEquals("0.2.0.dev0", model.getVersion());
         assertEquals(1, model.getSemanticModels().size());
 
         SemanticModel sm = model.getSemanticModels().get(0);
@@ -147,7 +147,7 @@ class OsiPolarisConverterTest {
         String yaml = generator.generate(model);
 
         // Verify key elements are present in generated YAML
-        assertTrue(yaml.contains("version: \"0.1.1\""));
+        assertTrue(yaml.contains("version: \"0.2.0.dev0\""));
         assertTrue(yaml.contains("name: test_model"));
         assertTrue(yaml.contains("name: orders"));
         assertTrue(yaml.contains("source: catalog.ns.orders"));
@@ -260,7 +260,7 @@ class OsiPolarisConverterTest {
 
         // We test the mapping logic by creating a model and verifying YAML output
         OsiModel model = new OsiModel();
-        model.setVersion("0.1.1");
+        model.setVersion("0.2.0.dev0");
 
         SemanticModel sm = new SemanticModel();
         sm.setName("test_ns");
@@ -312,7 +312,7 @@ class OsiPolarisConverterTest {
     void testTypeInference() throws Exception {
         // Test that the exporter correctly infers Iceberg types from field names
         OsiModel model = new OsiModel();
-        model.setVersion("0.1.1");
+        model.setVersion("0.2.0.dev0");
 
         SemanticModel sm = new SemanticModel();
         sm.setName("type_test");
@@ -356,12 +356,12 @@ class OsiPolarisConverterTest {
 
     @Test
     void testEmptyModel() {
-        String emptyYaml = "version: \"0.1.1\"\n";
+        String emptyYaml = "version: \"0.2.0.dev0\"\n";
         OsiModelParser parser = new OsiModelParser();
         OsiModel model = parser.parse(
                 new ByteArrayInputStream(emptyYaml.getBytes(StandardCharsets.UTF_8)));
 
-        assertEquals("0.1.1", model.getVersion());
+        assertEquals("0.2.0.dev0", model.getVersion());
         assertTrue(model.getSemanticModels().isEmpty());
     }
 

@@ -10,7 +10,7 @@ def test_basic_conversion(gooddata_tpcds_model: GdDeclarativeModel):
     """Verify basic structure of GoodData → OSI conversion."""
     result = gooddata_to_osi(gooddata_tpcds_model, model_name="tpcds_test")
 
-    assert result["version"] == "0.1.1"
+    assert result["version"] == "0.2.0.dev0"
     assert len(result["semantic_model"]) == 1
 
     sm = result["semantic_model"][0]

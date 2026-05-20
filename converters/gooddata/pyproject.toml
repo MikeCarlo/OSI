@@ -1,6 +1,6 @@
 [project]
 name = "gooddata-osi"
-version = "0.1.0"
+version = "0.2.0.dev0"
 description = "Bidirectional converter between GoodData LDM and OSI semantic model"
 authors = [{name = "GoodData Corporation", email = "support@gooddata.com"}]
 readme = "README.md"

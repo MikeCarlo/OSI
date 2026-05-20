@@ -14,7 +14,7 @@ import warnings
 import yaml
 
 
-SUPPORTED_VERSION = "0.1.1"
+SUPPORTED_VERSION = "0.2.0.dev0"
 
 
 class OsiConversionError(Exception):
@@ -27,7 +27,7 @@ def convert_osi_to_snowflake(osi_yaml_str):
 
     Expects the standard OSI wrapped format::
 
-        version: "0.1.1"
+        version: "0.2.0.dev0"
         semantic_model:
           - name: ...
 
