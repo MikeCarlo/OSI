@@ -170,14 +170,14 @@
         "object_maps": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/ObjectRef"
+            "$ref": "#/$defs/ObjectExpr"
           },
           "description": "Mappings from logical constructs that populate the concept in this component. Valid only when the concept is an entity type"
         },         
         "link_maps": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/RelationshipMap"
+            "$ref": "#/$defs/LinkExpr"
           },
           "description": "Mappings from logical model relationships to ontology relationships pertaining to the mapped concept"
         }
@@ -199,7 +199,7 @@
           "description": "Name of referent relationship"
         },
         "object": {
-          "$ref": "#/$defs/ObjectRef"
+          "$ref": "#/$defs/ObjectExpr"
         }
       },
       "required": ["relationship"],
@@ -221,7 +221,7 @@
       "required": ["player"],
       "additionalProperties": false
     },
-    "ObjectRef": {
+    "ObjectExpr": {
       "type": "object",
       "description": "Pattern of logical-level expressions for identifying objects of some referent concept using the values in one or more fields",
       "properties": {
@@ -243,7 +243,7 @@
       "required": ["referent"],
       "additionalProperties": false
     },
-    "RelationshipMap": {
+    "LinkExpr": {
       "type": "object",
       "description": "Mapping from logical model constructs to the links of some relationship in the ontology",
       "properties": {
@@ -252,12 +252,12 @@
           "description": "Name of relationship being populated by this map"
         },
         "maps": {
-            "$ref": "#/$defs/ObjectRef"
+            "$ref": "#/$defs/ObjectExpr"
         },
         "children": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/RelationshipMap"
+            "$ref": "#/$defs/LinkExpr"
           },
           "description": "Relationship maps at the next level in this hierarchy"
         }
