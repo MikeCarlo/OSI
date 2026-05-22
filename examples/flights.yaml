@@ -1075,20 +1075,20 @@ ontology_mappings:
               - object_mapping:
                   concept: Float
                   expression: Example_Runway_example_runway.length
-                populates: length
+                relationship: length
               - object_mapping:
                   concept: String
                   expression: Example_Runway_example_runway.geometry
-                populates: geometry
+                relationship: geometry
               - object_mapping:
                   concept: String
                   expression: Example_Runway_example_runway.designator
-                populates: designator
+                relationship: designator
               - object_mapping:
                   concept: Float
                   expression: Example_Runway_example_runway.shape_length
-                populates: shape_length
+                relationship: shape_length
               - object_mapping:
                   concept: String
                   expression: Example_Runway_example_runway.airport_id
-                populates: airport_id
+                relationship: airport_id

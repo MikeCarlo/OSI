@@ -248,7 +248,7 @@
       "type": "object",
       "description": "Mapping from logical schema to the links of relationships in the ontology",
       "properties": {
-        "populates": {
+        "relationship": {
           "type": "string",
           "description": "Name of relationship being populated by this mapping node"
         },
