@@ -148,7 +148,7 @@ class OSIDocument(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    version: str = "0.1.1"
+    version: str = "0.2.0.dev0"
     dialects: Optional[list[OSIDialect]] = None
     vendors: Optional[list[OSIVendor]] = None
     semantic_model: list[OSISemanticModel]

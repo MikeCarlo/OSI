@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "osi-python"
-version = "0.1.1"
+version = "0.2.0.dev0"
 description = "Python types for the Open Semantic Interchange (OSI) specification"
 requires-python = ">=3.11"
 dependencies = [

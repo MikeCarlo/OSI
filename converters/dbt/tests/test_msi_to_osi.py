@@ -72,7 +72,7 @@ class TestBasicConversion:
     def test_empty_manifest_produces_empty_datasets(self) -> None:
         result = MSIToOSIConverter().convert(_manifest(), osi_model_name="test").output
 
-        assert result.version == "0.1.1"
+        assert result.version == "0.2.0.dev0"
         assert len(result.semantic_model) == 1
         assert result.semantic_model[0].name == "test"
         assert result.semantic_model[0].datasets == []
@@ -1145,7 +1145,7 @@ class TestOSIJsonSerialization:
         result = MSIToOSIConverter().convert(_manifest(semantic_models=[sm]), osi_model_name="my_project").output
         parsed = json.loads(result.to_osi_json())
 
-        assert parsed["version"] == "0.1.1"
+        assert parsed["version"] == "0.2.0.dev0"
         assert len(parsed["semantic_model"]) == 1
         assert parsed["semantic_model"][0]["name"] == "my_project"
 
