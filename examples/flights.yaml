@@ -522,7 +522,7 @@ ontology:
     roles:
     - concept: String
     verbalizes:
-    - '{Route} has name- {String}'
+    - '{Route} has name- {String}'    # The hyphen after "name" has significance when verbalizing constraints
     multiplicity: ManyToOne
   - name: destination
     roles:
