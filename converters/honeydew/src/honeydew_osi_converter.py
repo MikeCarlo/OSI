@@ -240,6 +240,12 @@ def _dataset_to_files(
 
     primary_key = ds.get("primary_key") or []
     unique_keys = ds.get("unique_keys")
+    # A unique key identical to the primary key is re-derived from the entity's
+    # keys on the Honeydew → OSI path, so don't persist it as metadata — that
+    # would inject a redundant metadata block on a Honeydew → OSI → Honeydew round-trip.
+    if unique_keys:
+        pk_tuple = tuple(primary_key)
+        unique_keys = [uk for uk in unique_keys if tuple(uk) != pk_tuple] or None
     description = ds.get("description")
     ai_context = ds.get("ai_context")
     fields = ds.get("fields") or []
@@ -671,8 +677,16 @@ def _entity_to_osi_dataset(entity_data: dict[str, Any]) -> dict[str, Any]:
     osi_meta = entity_data.get("osi_meta") or {}
     if osi_meta.get("ai_context"):
         ds["ai_context"] = osi_meta["ai_context"]
-    if osi_meta.get("unique_keys"):
-        ds["unique_keys"] = osi_meta["unique_keys"]
+
+    # A Honeydew entity's keys uniquely identify its rows — Honeydew enforces this
+    # and validates that relationships join to those keys — so surface them as a
+    # unique key as well as the primary key. Union with any unique keys preserved
+    # from an OSI source, de-duplicated.
+    unique_keys = [list(uk) for uk in (osi_meta.get("unique_keys") or [])]
+    if keys and tuple(keys) not in {tuple(uk) for uk in unique_keys}:
+        unique_keys.append(list(keys))
+    if unique_keys:
+        ds["unique_keys"] = unique_keys
 
     restored_ext = list(osi_meta.get("custom_extensions") or [])
     honeydew_extra = entity_data.get("honeydew_extra") or {}

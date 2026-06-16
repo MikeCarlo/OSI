@@ -615,6 +615,7 @@ def _ansi(expr):
                 "name": "orders",
                 "source": "SNOWFLAKE_SAMPLE_DATA.TPCH_SF1.ORDERS",
                 "primary_key": ["orderkey"],
+                "unique_keys": [["orderkey"]],
                 "fields": [
                     {"name": "orderkey", "expression": _ansi("o_orderkey")},
                     {"name": "orderdate", "expression": _ansi("o_orderdate"),
@@ -631,6 +632,7 @@ def _ansi(expr):
           "dataset_attrs": [{"column": "id", "name": "id", "datatype": "number"}]}],
         _hd_root({"name": "ws", "datasets": [{
             "name": "orders", "source": "db.s.orders", "primary_key": ["id"],
+            "unique_keys": [["id"]],
             "fields": [{"name": "id", "expression": _ansi("id")}],
         }]}),
         id="field-number",
@@ -641,6 +643,7 @@ def _ansi(expr):
           "dataset_attrs": [{"column": "status", "name": "status", "datatype": "string"}]}],
         _hd_root({"name": "ws", "datasets": [{
             "name": "orders", "source": "db.s.orders", "primary_key": ["id"],
+            "unique_keys": [["id"]],
             "fields": [{"name": "status", "expression": _ansi("status"),
                         "dimension": {"is_time": False}}],
         }]}),
@@ -652,6 +655,7 @@ def _ansi(expr):
           "dataset_attrs": [{"column": "created_at", "name": "created_at", "datatype": "timestamp"}]}],
         _hd_root({"name": "ws", "datasets": [{
             "name": "orders", "source": "db.s.orders", "primary_key": ["id"],
+            "unique_keys": [["id"]],
             "fields": [{"name": "created_at", "expression": _ansi("created_at"),
                         "dimension": {"is_time": True}}],
         }]}),
@@ -665,6 +669,7 @@ def _ansi(expr):
                              "labels": ["sales", "reporting"]}]}],
         _hd_root({"name": "ws", "datasets": [{
             "name": "orders", "source": "db.s.orders", "primary_key": ["id"],
+            "unique_keys": [["id"]],
             "fields": [{
                 "name": "status", "expression": _ansi("status"),
                 "dimension": {"is_time": False},
@@ -691,8 +696,10 @@ def _ansi(expr):
         _hd_root({
             "name": "ws",
             "datasets": [
-                {"name": "customers", "source": "db.s.customers", "primary_key": ["id"]},
-                {"name": "orders", "source": "db.s.orders", "primary_key": ["order_id"]},
+                {"name": "customers", "source": "db.s.customers", "primary_key": ["id"],
+                 "unique_keys": [["id"]]},
+                {"name": "orders", "source": "db.s.orders", "primary_key": ["order_id"],
+                 "unique_keys": [["order_id"]]},
             ],
             "relationships": [{"name": "orders_to_customers", "from": "orders", "to": "customers",
                                "from_columns": ["customer_id"], "to_columns": ["id"]}],
@@ -713,8 +720,10 @@ def _ansi(expr):
         _hd_root({
             "name": "ws",
             "datasets": [
-                {"name": "customers", "source": "db.s.customers", "primary_key": ["id"]},
-                {"name": "orders", "source": "db.s.orders", "primary_key": ["order_id"]},
+                {"name": "customers", "source": "db.s.customers", "primary_key": ["id"],
+                 "unique_keys": [["id"]]},
+                {"name": "orders", "source": "db.s.orders", "primary_key": ["order_id"],
+                 "unique_keys": [["order_id"]]},
             ],
             "relationships": [{"name": "orders_to_customers", "from": "orders", "to": "customers",
                                "from_columns": ["customer_id"], "to_columns": ["id"]}],
@@ -729,7 +738,8 @@ def _ansi(expr):
           "metrics": [{"type": "metric", "entity": "orders", "name": "count",
                        "datatype": "number", "sql": "COUNT(*)"}]}],
         _hd_root({"name": "ws", "datasets": [
-            {"name": "orders", "source": "db.s.orders", "primary_key": ["id"]},
+            {"name": "orders", "source": "db.s.orders", "primary_key": ["id"],
+             "unique_keys": [["id"]]},
         ], "metrics": [{
             "name": "count",
             "expression": _ansi("COUNT(*)"),
@@ -747,6 +757,7 @@ def _ansi(expr):
                           "sql": "orders.price * (1 - orders.discount)"}]}],
         _hd_root({"name": "ws", "datasets": [{
             "name": "orders", "source": "db.s.orders", "primary_key": ["id"],
+            "unique_keys": [["id"]],
             "fields": [{
                 "name": "discounted",
                 "expression": _ansi("orders.price * (1 - orders.discount)"),
@@ -802,6 +813,26 @@ def test_honeydew_to_osi_duplicate_relations_deduplicated(tmp_path):
     assert len(result["semantic_model"][0].get("relationships", [])) == 1
 
 
+def test_honeydew_to_osi_relation_target_columns_are_unique_keys(tmp_path):
+    # Honeydew validates that a many-to-one relation joins to the target entity's
+    # keys, so the relation's to_columns are always covered by the target dataset's
+    # unique_keys (derived from those keys). This preserves the cardinality metadata
+    # for OSI consumers (e.g. Snowflake) without inspecting the relation itself.
+    _write_workspace(str(tmp_path), "ws", [
+        {"name": "orders", "keys": ["order_id"], "key_dataset": "orders", "sql": "db.s.orders",
+         "relations": [{"target_entity": "customers", "rel_type": "many-to-one",
+                        "connection": [{"src_field": "customer_id", "target_field": "id"}]}],
+         "dataset_attrs": []},
+        {"name": "customers", "keys": ["id"], "key_dataset": "customers",
+         "sql": "db.s.customers", "dataset_attrs": []},
+    ])
+    sm = yaml.safe_load(convert_honeydew_to_osi(str(tmp_path)))["semantic_model"][0]
+    datasets = {ds["name"]: ds for ds in sm["datasets"]}
+    rel = sm["relationships"][0]
+    target_ds = datasets[rel["to"]]
+    assert rel["to_columns"] in target_ds["unique_keys"]
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # OSI → Honeydew → OSI round-trip: full semantic model
 # ─────────────────────────────────────────────────────────────────────────────
@@ -815,15 +846,18 @@ def test_honeydew_to_osi_duplicate_relations_deduplicated(tmp_path):
     pytest.param(
         {"name": "m", "datasets": [{"name": "orders", "source": "db.s.orders",
             "primary_key": ["order_id"], "fields": []}]},
+        # OSI → Honeydew → OSI normalizes: the primary key surfaces as a unique key,
+        # because Honeydew expresses uniqueness through entity keys.
         {"name": "m", "datasets": [{"name": "orders", "source": "db.s.orders",
-            "primary_key": ["order_id"]}]},
+            "primary_key": ["order_id"], "unique_keys": [["order_id"]]}]},
         id="pk-single",
     ),
     pytest.param(
         {"name": "m", "datasets": [{"name": "orders", "source": "db.s.orders",
             "primary_key": ["order_id", "line_no"], "fields": []}]},
         {"name": "m", "datasets": [{"name": "orders", "source": "db.s.orders",
-            "primary_key": ["order_id", "line_no"]}]},
+            "primary_key": ["order_id", "line_no"],
+            "unique_keys": [["order_id", "line_no"]]}]},
         id="pk-composite",
     ),
     pytest.param(
@@ -831,9 +865,10 @@ def test_honeydew_to_osi_duplicate_relations_deduplicated(tmp_path):
             "primary_key": ["id"],
             "unique_keys": [["sku"], ["id", "variant"]],
             "fields": []}]},
+        # The primary key is appended as a unique key on the way back out.
         {"name": "m", "datasets": [{"name": "items", "source": "db.s.items",
             "primary_key": ["id"],
-            "unique_keys": [["sku"], ["id", "variant"]]}]},
+            "unique_keys": [["sku"], ["id", "variant"], ["id"]]}]},
         id="unique-keys",
     ),
     pytest.param(
@@ -1420,7 +1455,8 @@ def test_main_honeydew_to_osi(tmp_path):
         "version": OSI_VERSION,
         "vendors": ["HONEYDEW"],
         "semantic_model": [{"name": "ws", "datasets": [
-            {"name": "orders", "source": "DB.S.ORDERS", "primary_key": ["id"]},
+            {"name": "orders", "source": "DB.S.ORDERS", "primary_key": ["id"],
+             "unique_keys": [["id"]]},
         ]}],
     }
 

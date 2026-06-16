@@ -29,7 +29,7 @@ Bidirectional converter between [OSI](../../core-spec/spec.md) semantic models a
 |-----------------|-------------|
 | `workspace.name` | `semantic_model.name` |
 | Entity + primary dataset | `dataset` |
-| `entity.keys` | `dataset.primary_key` |
+| `entity.keys` | `dataset.primary_key` (and `dataset.unique_keys`) |
 | `dataset.attributes` (columns) | `fields` with `ANSI_SQL` expression = column name |
 | `calculated_attribute` SQL | `fields` with `ANSI_SQL` expression + `HONEYDEW` custom extension |
 | `entity.relations` (`many-to-one`) | `relationship` with `from` = this entity |
@@ -73,3 +73,4 @@ python -m pytest tests/
 - **Perspectives and domains**: Not converted (no OSI equivalent).
 - **Connection expressions** (`connection_expr`): Preserved in `HONEYDEW` custom extensions on the OSI relationship and restored on the return trip.
 - **`ai_context`**: OSI `ai_context` fields (synonyms, instructions) are stored in Honeydew `metadata` for round-trip recovery. Instructions are also merged into `description` for human readability.
+- **`unique_keys`**: A Honeydew entity's `keys` uniquely identify its rows — Honeydew enforces this and validates that relations join to those keys — so they are emitted as the OSI dataset's `primary_key` *and* a `unique_keys` entry. This surfaces the join-target cardinality for OSI consumers (e.g. a many-to-one relation's `to_columns` are always covered by the target's `unique_keys`). A unique key identical to the primary key is not stored back in Honeydew `metadata` on the return trip, so `Honeydew → OSI → Honeydew` stays clean; `OSI → Honeydew → OSI` normalizes by surfacing the primary key as a unique key.
