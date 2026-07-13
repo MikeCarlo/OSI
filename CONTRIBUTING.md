@@ -38,7 +38,6 @@ communities. If you are new to the ASF, the
 [Apache Incubator](https://incubator.apache.org/) and the
 [ASF New Committers guide](https://www.apache.org/dev/new-committers-guide.html)
 are good starting points.
->>>>>>> 8268b7b (Welcome Apache Ossie (incubating))
 
 ## Ways to Contribute
 
