@@ -434,6 +434,7 @@ Broad ecosystem adoption depends on practical tools that let teams validate thei
 - [GoodData Converter](converters/gooddata/) — bidirectional Ossie ↔ GoodData LDM converter
 - [Salesforce Converter](converters/salesforce/) — Ossie ↔ Salesforce converter
 - [Apache Polaris Converter](converters/polaris/) — Ossie → Apache Polaris converter
+- [OrionBelt Converter](converters/orionbelt/) — bidirectional Ossie ↔ OrionBelt OBML converter
 
 **Related Issues:**
 
