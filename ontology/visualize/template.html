@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+
+  Interactive ontology viewer. ontology/visualize/visualize.py fills in the
+  __PLACEHOLDERS__ below to generate a self-contained page for one ontology.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__ ontology</title>
+<style>
+  :root {
+    --entity: #1e88e5; --entity-bg: #e3f2fd;
+    --value: #43a047; --value-bg: #e8f5e9;
+    --builtin: #90a4ae; --builtin-bg: #eceff1;
+    --unknown: #e53935; --unknown-bg: #ffebee;
+    --extends: #8e24aa; --edge: #78909c;
+    --panel: #ffffff; --text: #263238; --muted: #607d8b; --border: #cfd8dc;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; height: 100%; font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--text); }
+  body { display: grid; grid-template-columns: 1fr 380px; grid-template-rows: auto 1fr; height: 100vh; }
+  header { grid-column: 1 / 3; display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 8px 14px; border-bottom: 1px solid var(--border); background: #fafbfc; }
+  header h1 { font-size: 16px; margin: 0 8px 0 0; }
+  header label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; user-select: none; }
+  header input[type=search] { padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; width: 200px; }
+  header button { padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px; background: white; cursor: pointer; }
+  header button:hover { background: #f1f3f4; }
+  .legend { display: flex; gap: 10px; margin-left: auto; color: var(--muted); }
+  .status { color: var(--muted); font-size: 12px; }
+  .status.error { color: var(--unknown); font-weight: 600; white-space: pre-wrap; }
+  .menu { position: relative; }
+  .menu-items { position: absolute; top: calc(100% + 4px); left: 0; z-index: 20; min-width: 270px; padding: 4px; background: white; border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,.14); }
+  header .menu-items button { display: block; width: 100%; text-align: left; border: 0; border-radius: 4px; padding: 6px 10px; background: none; font: inherit; }
+  header .menu-items button:hover, header .menu-items button:focus { background: #eef3f8; outline: none; }
+  .menu-items small { display: block; color: var(--muted); font-size: 11px; }
+  .source { display: inline-flex; align-items: center; gap: 6px; padding: 2px 4px 2px 8px; border: 1px solid var(--border); border-radius: 12px; background: white; font-size: 12px; }
+  .source .live { color: var(--value); font-weight: 600; }
+  .source .live::before { content: "● "; }
+  header .source button { padding: 0 6px; border: 0; border-radius: 10px; font-size: 12px; }
+  body.dropping #canvas { outline: 3px dashed var(--entity); outline-offset: -8px; }
+  .legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .swatch { width: 12px; height: 12px; border-radius: 3px; border: 2px solid; display: inline-block; }
+  #canvas { position: relative; overflow: hidden; background: radial-gradient(circle, #e0e6ea 1px, transparent 1px) 0 0 / 22px 22px; }
+  svg { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+  svg.panning { cursor: grabbing; }
+  .node rect { stroke-width: 2; rx: 8; ry: 8; }
+  .node text { font-size: 12px; pointer-events: none; text-anchor: middle; dominant-baseline: central; }
+  .node .sub { font-size: 10px; fill: var(--muted); }
+  .node { cursor: pointer; }
+  .node.selected rect { stroke-width: 4; filter: drop-shadow(0 0 6px rgba(0,0,0,.25)); }
+  .node.match rect { stroke: #ff6f00 !important; stroke-width: 4; }
+  .edge path { fill: none; stroke: var(--edge); stroke-width: 1.4; }
+  .edge.derived path { stroke-dasharray: 5 4; }
+  .edge.extends path { stroke: var(--extends); stroke-width: 1.6; }
+  .edge text { font-size: 10px; fill: #455a64; paint-order: stroke; stroke: white; stroke-width: 3px; text-anchor: middle; dominant-baseline: central; }
+  .edge .card { fill: #90a4ae; font-size: 9px; }
+  .faded { opacity: .12; }
+  .hide-labels .edge text { display: none; }
+  aside { border-left: 1px solid var(--border); background: var(--panel); overflow: auto; padding: 14px 16px; }
+  aside h2 { margin: 0 0 4px; font-size: 18px; }
+  aside h3 { margin: 18px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .badge { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 10px; border: 1px solid; margin-right: 4px; }
+  .rel { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; }
+  .rel .head { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; }
+  .rel .mult { font-weight: normal; color: var(--muted); font-size: 11px; white-space: nowrap; }
+  .verb { color: #37474f; font-style: italic; margin-top: 2px; }
+  code, .expr { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11.5px; }
+  .expr { display: block; background: #f5f7f8; border-radius: 4px; padding: 4px 6px; margin-top: 4px; white-space: pre-wrap; word-break: break-word; }
+  a.c { color: var(--entity); text-decoration: none; cursor: pointer; font-weight: 600; }
+  a.c.v { color: var(--value); }
+  a.c.b { color: #607d8b; }
+  a.c:hover { text-decoration: underline; }
+  .muted { color: var(--muted); }
+  table.stats { border-collapse: collapse; }
+  table.stats td { padding: 2px 12px 2px 0; }
+  ul { margin: 4px 0; padding-left: 18px; }
+  #tooltip { position: absolute; pointer-events: none; background: rgba(38,50,56,.92); color: white; padding: 5px 8px; border-radius: 4px; font-size: 12px; max-width: 360px; display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title"></h1>
+  <input type="search" id="search" placeholder="Search concepts…" aria-label="Search concepts">
+  <label><input type="checkbox" id="showValues"> Value types</label>
+  <label><input type="checkbox" id="showBuiltins"> Built-ins</label>
+  <label><input type="checkbox" id="showLabels" checked> Edge labels</label>
+  <button id="fit" title="Zoom to fit">Fit</button>
+  <button id="openOntology" title="Open an ontology .yaml or .json file (or drop one on the page). In Edge and Chrome the page reloads it automatically whenever the file is saved.">Open ontology…</button>
+  <input type="file" id="ontologyFile" accept=".yaml,.yml,.json" hidden>
+  <div class="menu" id="layoutMenu">
+    <button id="layoutButton" aria-haspopup="menu" aria-expanded="false" aria-controls="layoutItems">Layout <span aria-hidden="true">▾</span></button>
+    <div class="menu-items" id="layoutItems" role="menu" aria-labelledby="layoutButton" hidden>
+      <button role="menuitem" id="saveLayout">Save layout<small>Download positions as a .layout.json file</small></button>
+      <button role="menuitem" id="loadLayout">Load layout…<small>Apply positions from a .layout.json file</small></button>
+      <button role="menuitem" id="relayout">Reset layout<small>Discard your arrangement and lay out again</small></button>
+    </div>
+  </div>
+  <input type="file" id="layoutFile" accept=".json,application/json" hidden>
+  <span id="source" class="source" hidden></span>
+  <span id="status" class="status" role="status"></span>
+  <div class="legend">
+    <span><i class="swatch" style="background:var(--entity-bg);border-color:var(--entity)"></i>Entity type</span>
+    <span><i class="swatch" style="background:var(--value-bg);border-color:var(--value)"></i>Value type</span>
+    <span><i class="swatch" style="background:var(--builtin-bg);border-color:var(--builtin)"></i>Built-in</span>
+    <span><svg width="28" height="10"><line x1="0" y1="5" x2="20" y2="5" stroke="#8e24aa" stroke-width="2"/><path d="M20,1 L28,5 L20,9 Z" fill="white" stroke="#8e24aa"/></svg>extends</span>
+    <span><svg width="28" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="#78909c" stroke-width="2" stroke-dasharray="4 3"/></svg>derived</span>
+  </div>
+</header>
+<div id="canvas">
+  <svg id="svg" role="img" aria-label="Ontology graph">
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 Z" fill="#78909c"/>
+      </marker>
+      <marker id="triangle" viewBox="0 0 12 12" refX="12" refY="6" markerWidth="12" markerHeight="12" orient="auto">
+        <path d="M1,1 L12,6 L1,11 Z" fill="white" stroke="#8e24aa" stroke-width="1.4"/>
+      </marker>
+    </defs>
+    <g id="viewport"><g id="edges"></g><g id="nodes"></g></g>
+  </svg>
+  <div id="tooltip"></div>
+</div>
+<aside id="details"></aside>
+<script id="ontology-data" type="application/json">__DATA__</script>
+<script id="ontology-layout" type="application/json">__LAYOUT__</script>
+<script id="ossie-yaml">
+// Reader for the YAML subset used by Ossie documents: block mappings and sequences, flow
+// collections ([...] and {...}, possibly spanning lines), plain/quoted scalars, block scalars
+// (| and >) and comments. Anchors, aliases, tags and multiple documents are rejected.
+// Scalars resolve like PyYAML's safe_load (YAML 1.1 booleans, ints and floats).
+const OssieYaml = (() => {
+  "use strict";
+  class YamlError extends Error {}
+  const ESCAPES = { "0": "\0", a: "\x07", b: "\b", t: "\t", "\t": "\t", n: "\n", v: "\v", f: "\f", r: "\r", e: "\x1b",
+    " ": " ", '"': '"', "/": "/", "\\": "\\", N: "\x85", _: "\xa0", L: "\u2028", P: "\u2029" };
+
+  function setKey(obj, key, value) {
+    Object.defineProperty(obj, key, { value, enumerable: true, writable: true, configurable: true });
+  }
+  function scanQuoted(s, start) {
+    const q = s[start];
+    for (let k = start + 1; k < s.length; k++) {
+      if (q === '"' && s[k] === "\\") { k++; continue; }
+      if (s[k] === q) { if (q === "'" && s[k + 1] === "'") { k++; continue; } return k; }
+    }
+    return -1;
+  }
+  function unquote(body, q) {
+    if (q === "'") return body.replace(/''/g, "'");
+    return body.replace(/\\(x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|[\s\S])/g, (m, e) => {
+      if (e.length > 1) return String.fromCodePoint(parseInt(e.slice(1), 16));
+      if (e in ESCAPES) return ESCAPES[e];
+      throw new YamlError(`invalid escape "\\${e}" in double-quoted string`);
+    });
+  }
+  function resolvePlain(s) {
+    if (s === "" || s === "~" || /^(null|Null|NULL)$/.test(s)) return null;
+    if (/^(true|True|TRUE|yes|Yes|YES|on|On|ON)$/.test(s)) return true;
+    if (/^(false|False|FALSE|no|No|NO|off|Off|OFF)$/.test(s)) return false;
+    const t = s.replace(/_/g, "");
+    if (/^[-+]?(0|[1-9][0-9_]*)$/.test(s)) return Number(t);
+    if (/^[-+]?0x[0-9a-fA-F_]+$/.test(s)) return (t[0] === "-" ? -1 : 1) * parseInt(t.replace(/^[-+]?0x/, ""), 16);
+    if (/^[-+]?0b[01_]+$/.test(s)) return (t[0] === "-" ? -1 : 1) * parseInt(t.replace(/^[-+]?0b/, ""), 2);
+    if (/^[-+]?0[0-7_]+$/.test(s)) return (t[0] === "-" ? -1 : 1) * parseInt(t.replace(/^[-+]?0/, ""), 8);
+    if (/^[-+]?([0-9][0-9_]*)?\.[0-9_]*([eE][-+][0-9]+)?$/.test(s) && /[0-9]/.test(s)) return Number(t);
+    if (/^[-+]?\.(inf|Inf|INF)$/.test(s)) return s[0] === "-" ? -Infinity : Infinity;
+    if (/^\.(nan|NaN|NAN)$/.test(s)) return NaN;
+    return s;
+  }
+  function stripComment(s) {
+    let q = null;
+    for (let k = 0; k < s.length; k++) {
+      const ch = s[k];
+      if (q) {
+        if (q === '"' && ch === "\\") k++;
+        else if (ch === q) { if (q === "'" && s[k + 1] === "'") k++; else q = null; }
+        continue;
+      }
+      if ((ch === '"' || ch === "'") && (k === 0 || /[\s[{,:-]/.test(s[k - 1]))) q = ch;
+      else if (ch === "#" && (k === 0 || /\s/.test(s[k - 1]))) return s.slice(0, k);
+    }
+    return s;
+  }
+  function flowDepth(s) {
+    let depth = 0;
+    for (let k = 0; k < s.length; k++) {
+      const ch = s[k];
+      if ((ch === '"' || ch === "'") && (k === 0 || /[\s[{,:]/.test(s[k - 1]))) {
+        const end = scanQuoted(s, k);
+        if (end < 0) return depth;
+        k = end;
+      } else if (ch === "[" || ch === "{") depth++;
+      else if (ch === "]" || ch === "}") depth--;
+    }
+    return depth;
+  }
+  const isSeqItem = t => t === "-" || /^-\s/.test(t);
+  function splitKey(t) {
+    if (t[0] === '"' || t[0] === "'") {
+      const end = scanQuoted(t, 0);
+      if (end < 0) return null;
+      let k = end + 1;
+      while (t[k] === " ") k++;
+      if (t[k] !== ":" || (k + 1 < t.length && !/\s/.test(t[k + 1]))) return null;
+      return [unquote(t.slice(1, end), t[0]), t.slice(k + 1)];
+    }
+    if (/^[[\]{}&*!|>%@`?,]/.test(t) || isSeqItem(t)) return null;
+    for (let k = 0; k < t.length; k++)
+      if (t[k] === ":" && (k + 1 === t.length || /\s/.test(t[k + 1]))) return [t.slice(0, k).trim(), t.slice(k + 1)];
+    return null;
+  }
+
+  function parse(text) {
+    const lines = String(text).replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n").split("\n");
+    let i = 0, started = false;
+    const fail = (msg, at = i) => { throw new YamlError(`line ${Math.min(at, lines.length - 1) + 1}: ${msg}`); };
+    const indentOf = s => s.length - s.replace(/^ +/, "").length;
+    const content = k => stripComment(lines[k]).trim();
+
+    // Move to the next line with content; false at end of input.
+    function skip() {
+      for (; i < lines.length; i++) {
+        const raw = lines[i], t = content(i);
+        if (t === "") continue;
+        if (/^ *\t/.test(raw)) fail("tabs are not allowed for indentation");
+        if (indentOf(raw) === 0 && (t === "---" || t === "..." || t.startsWith("%"))) {
+          if (started && t === "---") fail("multiple YAML documents are not supported");
+          continue;
+        }
+        started = true;
+        return true;
+      }
+      return false;
+    }
+
+    function parseBlock(minIndent, parentIndent) {
+      if (!skip()) return null;
+      const ind = indentOf(lines[i]);
+      if (ind < minIndent) return null;
+      const t = content(i);
+      if (isSeqItem(t)) return parseSeq(ind);
+      if (splitKey(t)) return parseMap(ind);
+      return parseInline(t, parentIndent);
+    }
+
+    function parseMap(ind) {
+      const obj = {};
+      while (skip()) {
+        const li = indentOf(lines[i]);
+        if (li < ind) break;
+        if (li > ind) fail("unexpected indentation");
+        const t = content(i);
+        const kv = splitKey(t);
+        if (!kv) { if (isSeqItem(t)) fail("unexpected list item"); fail('expected "key: value"'); }
+        const [key, restRaw] = kv, rest = restRaw.trim();
+        if (Object.prototype.hasOwnProperty.call(obj, key)) fail(`duplicate key "${key}"`);
+        let value = null;
+        if (rest) value = parseInline(rest, ind);
+        else {
+          i++;
+          if (skip()) {
+            const ni = indentOf(lines[i]);
+            if (ni > ind) value = parseBlock(ni, ind);
+            else if (ni === ind && isSeqItem(content(i))) value = parseSeq(ind);
+          }
+        }
+        setKey(obj, key, value);
+      }
+      return obj;
+    }
+
+    function parseSeq(ind) {
+      const arr = [];
+      while (skip()) {
+        const line = lines[i], li = indentOf(line);
+        if (li < ind) break;
+        if (li > ind) fail("unexpected indentation");
+        if (!isSeqItem(content(i))) break;
+        const afterDash = line.slice(li + 1), rest = afterDash.replace(/^\s+/, "");
+        if (stripComment(rest).trim() === "") {
+          i++;
+          arr.push(skip() && indentOf(lines[i]) > ind ? parseBlock(indentOf(lines[i]), ind) : null);
+          continue;
+        }
+        // Re-indent the item's content so nested mappings line up with their continuation lines.
+        const col = li + 1 + afterDash.length - rest.length;
+        lines[i] = " ".repeat(col) + rest;
+        arr.push(parseBlock(col, ind));
+      }
+      return arr;
+    }
+
+    // Parse a value that starts on line i (rest = its comment-free text); leaves i after the value.
+    function parseInline(rest, parentIndent) {
+      const c = rest[0];
+      if (c === "&" || c === "*") fail("anchors and aliases are not supported");
+      if (c === "!") fail("tags are not supported");
+      if (c === "|" || c === ">") return parseBlockScalar(rest, parentIndent);
+      if (c === "[" || c === "{") {
+        const first = i;
+        let buf = rest;
+        while (flowDepth(buf) > 0) {
+          if (++i >= lines.length) fail(`unclosed "${c}"`, first);
+          buf += " " + content(i);
+        }
+        i++;
+        return parseFlow(buf, first);
+      }
+      if (c === '"' || c === "'") return parseQuoted(rest, parentIndent);
+      let s = rest;
+      for (i++; i < lines.length; i++) {
+        const t = content(i);
+        if (t === "" || indentOf(lines[i]) <= parentIndent || isSeqItem(t) || splitKey(t)) break;
+        s += " " + t;
+      }
+      return resolvePlain(s);
+    }
+
+    function parseQuoted(rest, parentIndent) {
+      const q = rest[0], first = i;
+      let end = scanQuoted(rest, 0);
+      if (end >= 0) {
+        if (rest.slice(end + 1).trim()) fail("unexpected text after quoted string");
+        i++;
+        return unquote(rest.slice(1, end), q);
+      }
+      // Multi-line quoted scalar: line breaks fold to spaces, blank lines to newlines.
+      const stripped = stripComment(lines[i]).trimEnd();
+      let buf = lines[i].slice(stripped.length - rest.length).trimEnd();
+      for (i++; ; i++) {
+        if (i >= lines.length) fail("unclosed quoted string", first);
+        const t = lines[i].trim();
+        buf += t === "" ? "\n" : (buf.endsWith("\n") ? "" : " ") + t;
+        end = scanQuoted(buf, 0);
+        if (end >= 0) break;
+      }
+      if (stripComment(buf.slice(end + 1)).trim()) fail("unexpected text after quoted string");
+      i++;
+      return unquote(buf.slice(1, end), q);
+    }
+
+    function parseBlockScalar(header, parentIndent) {
+      const m = /^([|>])(?:([1-9])([+-])?|([+-])([1-9])?)?\s*$/.exec(header);
+      if (!m) fail("invalid block scalar header");
+      const folded = m[1] === ">", chomp = m[3] || m[4] || "", explicit = Number(m[2] || m[5] || 0);
+      let blockIndent = explicit ? Math.max(parentIndent, 0) + explicit : 0;
+      const body = [];
+      for (i++; i < lines.length; i++) {
+        const raw = lines[i];
+        if (raw.trim() === "") { body.push(""); continue; }
+        const ind = indentOf(raw);
+        if (!blockIndent) { if (ind <= parentIndent) break; blockIndent = ind; }
+        if (ind < blockIndent) break;
+        body.push(raw.slice(blockIndent));
+      }
+      let trailing = 0;
+      while (body.length && body[body.length - 1] === "") { body.pop(); trailing++; }
+      if (!body.length) return chomp === "+" ? "\n".repeat(trailing) : "";
+      let out = body[0];
+      for (let k = 1; k < body.length; k++) {
+        const line = body[k], prev = body[k - 1];
+        if (!folded) out += "\n" + line;
+        else if (line === "") out += "\n";
+        else if (prev === "") out += line;
+        else out += (/^\s/.test(line) || /^\s/.test(prev) ? "\n" : " ") + line;
+      }
+      if (chomp === "-") return out;
+      return out + "\n" + (chomp === "+" ? "\n".repeat(trailing) : "");
+    }
+
+    function parseFlow(s, lineNo) {
+      let p = 0;
+      const ffail = msg => fail(`${msg} in flow collection`, lineNo);
+      const ws = () => { while (p < s.length && /\s/.test(s[p])) p++; };
+      function value(ctx) {
+        ws();
+        const c = s[p];
+        if (c === "[") {
+          p++;
+          const arr = [];
+          for (;;) {
+            ws();
+            if (s[p] === "]") { p++; return arr; }
+            const v = value("seq");
+            ws();
+            if (s[p] === ":") { p++; const pair = {}; setKey(pair, String(v), value("map")); arr.push(pair); ws(); }
+            else arr.push(v);
+            if (s[p] === ",") { p++; continue; }
+            if (s[p] === "]") { p++; return arr; }
+            ffail('expected "," or "]"');
+          }
+        }
+        if (c === "{") {
+          p++;
+          const obj = {};
+          for (;;) {
+            ws();
+            if (s[p] === "}") { p++; return obj; }
+            const k = value("key");
+            ws();
+            let v = null;
+            if (s[p] === ":") { p++; v = value("map"); ws(); }
+            setKey(obj, String(k), v);
+            if (s[p] === ",") { p++; continue; }
+            if (s[p] === "}") { p++; return obj; }
+            ffail('expected "," or "}"');
+          }
+        }
+        if (c === '"' || c === "'") {
+          const end = scanQuoted(s, p);
+          if (end < 0) ffail("unclosed quoted string");
+          const v = unquote(s.slice(p + 1, end), c);
+          p = end + 1;
+          return v;
+        }
+        if (c === "&" || c === "*") ffail("anchors and aliases are not supported");
+        if (c === "!") ffail("tags are not supported");
+        const start = p;
+        while (p < s.length) {
+          const ch = s[p];
+          if (ch === "," || ch === "]" || ch === "}" || ch === "[" || ch === "{") break;
+          if (ch === ":" && ctx !== "map" && (p + 1 >= s.length || /[\s,\]}]/.test(s[p + 1]))) break;
+          p++;
+        }
+        return resolvePlain(s.slice(start, p).trim());
+      }
+      const v = value("top");
+      ws();
+      if (p < s.length) ffail(`unexpected "${s[p]}"`);
+      return v;
+    }
+
+    const value = parseBlock(0, -1);
+    if (skip()) fail(indentOf(lines[i]) > 0 ? "unexpected indentation" : "unexpected content");
+    return value;
+  }
+  return { parse, YamlError };
+})();
+</script>
+<script id="ossie-ontology">
+// Interprets a parsed ontology document the same way as parse_ontology() and to_json_model() in
+// visualize.py, so ontologies opened in the browser match generated pages.
+const OssieOntology = (() => {
+  "use strict";
+  const BUILTINS = { Any: "EntityType", Boolean: "ValueType", Date: "ValueType", DateTime: "ValueType",
+    Decimal: "ValueType", Float: "ValueType", Integer: "ValueType", String: "ValueType" };
+  const isObject = v => v !== null && typeof v === "object" && !Array.isArray(v);
+  const asList = v => v == null ? [] : Array.isArray(v) ? v : [v];
+  const strList = v => asList(v).map(String);
+  const orNull = v => v === undefined ? null : v;
+
+  function normalize(doc) {
+    if (!isObject(doc) || !Array.isArray(doc.ontology))
+      throw new Error("document has no 'ontology' list; is this an Ossie ontology?");
+    const concepts = new Map();
+    for (const comp of doc.ontology) {
+      if (!isObject(comp) || !("concept" in comp))
+        throw new Error(`ontology component without a 'concept' name: ${JSON.stringify(comp)}`);
+      const name = String(comp.concept);
+      if (concepts.has(name)) throw new Error(`concept '${name}' is declared more than once`);
+      const identifyBy = strList(comp.identify_by);
+      const relationships = asList(comp.relationships).map(rel => {
+        if (!isObject(rel) || !("name" in rel))
+          throw new Error(`relationship without a 'name' on concept '${name}': ${JSON.stringify(rel)}`);
+        return {
+          name: String(rel.name),
+          roles: asList(rel.roles).filter(r => isObject(r) && "concept" in r)
+            .map(r => ({ concept: String(r.concept), name: orNull(r.name) })),
+          multiplicity: orNull(rel.multiplicity),
+          description: orNull(rel.description),
+          verbalizes: strList(rel.verbalizes),
+          derived_by: strList(rel.derived_by),
+          requires: strList(rel.requires),
+          iri: orNull(rel.iri),
+          identifying: identifyBy.includes(String(rel.name)),
+        };
+      });
+      concepts.set(name, {
+        name, type: String(orNull(comp.type) ?? "Unknown"), builtin: false, declared: true,
+        description: orNull(comp.description), extends: strList(comp.extends), identify_by: identifyBy,
+        requires: strList(comp.requires), derived_by: strList(comp.derived_by), iri: orNull(comp.iri), relationships,
+      });
+    }
+    // Add built-in or undeclared concepts that are referenced, so every edge has two ends.
+    const referenced = [];
+    for (const c of [...concepts.values()]) {
+      referenced.push(...c.extends);
+      for (const r of c.relationships) referenced.push(...r.roles.map(role => role.concept));
+    }
+    for (const ref of referenced) {
+      if (concepts.has(ref)) continue;
+      const builtin = Object.prototype.hasOwnProperty.call(BUILTINS, ref);
+      concepts.set(ref, { name: ref, type: builtin ? BUILTINS[ref] : "Unknown", builtin, declared: builtin,
+        description: null, extends: [], identify_by: [], requires: [], derived_by: [], iri: null, relationships: [] });
+    }
+    return { name: String(orNull(doc.name) ?? "Ontology"), description: orNull(doc.description),
+      requires: strList(doc.requires), concepts: [...concepts.values()] };
+  }
+
+  // Parse ontology text (YAML or JSON) into the viewer's model.
+  function fromText(text, fileName = "") {
+    let doc;
+    const looksJson = /\.json$/i.test(fileName) || /^\s*\{/.test(text);
+    if (looksJson) {
+      try { doc = JSON.parse(text); } catch (e) { if (/\.json$/i.test(fileName)) throw new Error("invalid JSON: " + e.message); }
+    }
+    if (doc === undefined) doc = OssieYaml.parse(text);
+    return normalize(doc);
+  }
+  return { normalize, fromText };
+})();
+</script>
+<script>
+(() => {
+  "use strict";
+  const builtinModel = JSON.parse(document.getElementById("ontology-data").textContent);
+  const embeddedLayout = JSON.parse(document.getElementById("ontology-layout").textContent);
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const $ = id => document.getElementById(id);
+  const svg = $("svg"), viewport = $("viewport"), edgeLayer = $("edges"), nodeLayer = $("nodes");
+  const details = $("details"), tooltip = $("tooltip");
+  const state = { showValues: __SHOW_VALUE_TYPES__, showBuiltins: false, selected: null, search: "" };
+  $("showValues").checked = state.showValues;
+
+  const isEntity = c => c.type === "EntityType";
+  const kind = c => c.builtin ? "builtin" : !c.declared ? "unknown" : isEntity(c) ? "entity" : "value";
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
+  const el = (tag, attrs = {}) => { const e = document.createElementNS(SVG_NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; };
+
+  // The ontology on screen. It starts as the one built into the page and can be replaced by
+  // opening a file (see "opening ontology files" below).
+  let model, byName, subtypes, incoming, STORAGE_KEY;
+  function setModel(m) {
+    model = m;
+    byName = new Map(model.concepts.map(c => [c.name, c]));
+    // Reverse indexes: who extends a concept, and which relationships reference it.
+    subtypes = new Map(); incoming = new Map();
+    for (const c of model.concepts) {
+      for (const p of c.extends) (subtypes.get(p) || subtypes.set(p, []).get(p)).push(c.name);
+      for (const r of c.relationships) for (const role of r.roles)
+        if (role.concept !== c.name) (incoming.get(role.concept) || incoming.set(role.concept, []).get(role.concept)).push([c.name, r]);
+    }
+    STORAGE_KEY = "ossie-ontology-layout:" + model.name;
+    $("title").textContent = model.name;
+    document.title = model.name + " ontology";
+  }
+  setModel(builtinModel);
+
+  function visible(c) {
+    if (isEntity(c) && c.declared) return true;
+    if (!state.showValues) return false;
+    if (c.builtin) return state.showBuiltins;
+    return true;
+  }
+
+  // ---------- graph construction ----------
+  let nodes = [], edges = [], nodeById = new Map();
+  const positions = new Map();  // persists layout across toggles
+
+  function buildGraph() {
+    const keep = model.concepts.filter(visible);
+    nodeById = new Map();
+    nodes = keep.map(c => {
+      const prev = positions.get(c.name);
+      const attrs = c.relationships.filter(r => r.roles.length !== 1 || !visible(byName.get(r.roles[0].concept))).length;
+      const sub = isEntity(c) ? (attrs ? attrs + " attribute" + (attrs > 1 ? "s" : "") : "") : (c.builtin ? "built-in" : "value type");
+      const w = Math.max(c.name.length * 7.4, sub.length * 6) + 26, h = sub ? 40 : 30;
+      const n = { id: c.name, c, w, h, sub, x: prev ? prev.x : NaN, y: prev ? prev.y : NaN, vx: 0, vy: 0, fixed: prev ? prev.fixed : false };
+      nodeById.set(c.name, n);
+      return n;
+    });
+    edges = [];
+    for (const c of keep) {
+      for (const r of c.relationships) {
+        const ends = r.roles.length === 1 && r.multiplicity === "ManyToOne" ? ["*", "0..1"]
+                   : r.roles.length === 1 && r.multiplicity === "OneToOne" ? ["0..1", "0..1"] : null;
+        for (const role of r.roles) if (nodeById.has(role.concept))
+          edges.push({ source: c.name, target: role.concept, rel: r, owner: c.name, kind: "rel", ends });
+      }
+      for (const p of c.extends) if (nodeById.has(p))
+        edges.push({ source: c.name, target: p, kind: "extends" });
+    }
+    // Index parallel edges so they can be drawn as distinct curves.
+    const groups = new Map();
+    for (const e of edges) {
+      const key = [e.source, e.target].sort().join("\u0000");
+      (groups.get(key) || groups.set(key, []).get(key)).push(e);
+    }
+    for (const g of groups.values()) g.forEach((e, i) => {
+      const flip = e.source > e.target ? -1 : 1;
+      e.bend = (i - (g.length - 1) / 2) * 34 * flip;
+      if (e.source === e.target) e.bend = 40 + i * 22;
+    });
+    seedPositions();
+  }
+
+  function seedPositions() {
+    const unplaced = nodes.filter(n => isNaN(n.x));
+    const R = 60 + nodes.length * 14;
+    unplaced.forEach((n, i) => {
+      // Place new nodes near an already-positioned neighbour when possible.
+      const nb = edges.map(e => e.source === n.id ? e.target : e.target === n.id ? e.source : null)
+        .map(id => id && nodeById.get(id)).find(m => m && !isNaN(m.x));
+      const a = (i / Math.max(1, unplaced.length)) * Math.PI * 2 + (i % 2) * 0.3;
+      if (nb) { n.x = nb.x + Math.cos(a) * 120; n.y = nb.y + Math.sin(a) * 120; }
+      else { n.x = Math.cos(a) * R; n.y = Math.sin(a) * R; }
+    });
+  }
+
+  // ---------- force layout ----------
+  let alpha = 1, running = false;
+  function tick() {
+    const k = alpha;
+    for (let i = 0; i < nodes.length; i++) {
+      const a = nodes[i];
+      for (let j = i + 1; j < nodes.length; j++) {
+        const b = nodes[j];
+        let dx = b.x - a.x, dy = b.y - a.y;
+        let d2 = dx * dx + dy * dy;
+        if (d2 < 1) { dx = Math.random() - .5; dy = Math.random() - .5; d2 = 1; }
+        const d = Math.sqrt(d2);
+        const f = Math.min(26000 / d2, 60) * k;
+        const fx = dx / d * f, fy = dy / d * f;
+        a.vx -= fx; a.vy -= fy; b.vx += fx; b.vy += fy;
+      }
+    }
+    for (const e of edges) {
+      if (e.source === e.target) continue;
+      const a = nodeById.get(e.source), b = nodeById.get(e.target);
+      const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
+      const rest = 150 + (a.w + b.w) / 3;
+      const f = (d - rest) * 0.04 * k;
+      const fx = dx / d * f, fy = dy / d * f;
+      a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
+    }
+    // Push nodes off edges they are not part of, so edges and labels don't run underneath them.
+    for (const e of edges) {
+      if (e.source === e.target) continue;
+      const a = nodeById.get(e.source), b = nodeById.get(e.target);
+      const ex = b.x - a.x, ey = b.y - a.y, len2 = ex * ex + ey * ey || 1;
+      for (const n of nodes) {
+        if (n === a || n === b) continue;
+        const t = ((n.x - a.x) * ex + (n.y - a.y) * ey) / len2;
+        if (t <= 0 || t >= 1) continue;
+        const px = a.x + ex * t, py = a.y + ey * t;
+        let dx = n.x - px, dy = n.y - py;
+        const d = Math.hypot(dx, dy) || 1, clear = n.h / 2 + n.w / 4 + 24;
+        if (d >= clear) continue;
+        const f = (clear - d) * 0.25 * k;
+        dx /= d; dy /= d;
+        n.vx += dx * f; n.vy += dy * f;
+        a.vx -= dx * f / 2; a.vy -= dy * f / 2; b.vx -= dx * f / 2; b.vy -= dy * f / 2;
+      }
+    }
+    for (const n of nodes) {
+      n.vx -= n.x * 0.004 * k; n.vy -= n.y * 0.004 * k;
+      if (n.fixed) { n.vx = n.vy = 0; continue; }
+      n.vx *= 0.6; n.vy *= 0.6;
+      n.x += Math.max(-30, Math.min(30, n.vx)); n.y += Math.max(-30, Math.min(30, n.vy));
+    }
+    // Resolve rectangle overlaps.
+    for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
+      const a = nodes[i], b = nodes[j];
+      const ox = (a.w + b.w) / 2 + 14 - Math.abs(a.x - b.x), oy = (a.h + b.h) / 2 + 14 - Math.abs(a.y - b.y);
+      if (ox > 0 && oy > 0) {
+        const wa = a.fixed ? 0 : (b.fixed ? 1 : .5), wb = 1 - wa;
+        if (ox < oy) { const s = Math.sign(b.x - a.x) || 1; a.x -= s * ox * wa; b.x += s * ox * wb; }
+        else { const s = Math.sign(b.y - a.y) || 1; a.y -= s * oy * wa; b.y += s * oy * wb; }
+      }
+    }
+    alpha *= 0.985;
+  }
+  function settle(iterations) { for (let i = 0; i < iterations; i++) tick(); }
+  function animate() {
+    if (running) return;
+    running = true;
+    const step = () => {
+      tick(); tick(); draw();
+      if (alpha > 0.02) requestAnimationFrame(step); else { running = false; savePositions(); persistLayout(false); }
+    };
+    requestAnimationFrame(step);
+  }
+  function reheat(a = 0.4) { alpha = Math.max(alpha, a); animate(); }
+  function savePositions() { for (const n of nodes) positions.set(n.id, { x: n.x, y: n.y, fixed: n.fixed }); }
+
+  // ---------- rendering ----------
+  const view = { x: 0, y: 0, k: 1 };
+  function applyView() { viewport.setAttribute("transform", `translate(${view.x},${view.y}) scale(${view.k})`); }
+
+  function clip(n, tx, ty) {
+    // Point where the ray from the centre of n towards (tx, ty) leaves its rectangle.
+    const dx = tx - n.x, dy = ty - n.y;
+    if (!dx && !dy) return [n.x, n.y];
+    const s = Math.min(Math.abs((n.w / 2 + 3) / (dx || 1e-9)), Math.abs((n.h / 2 + 3) / (dy || 1e-9)));
+    return [n.x + dx * s, n.y + dy * s];
+  }
+
+  let nodeEls = new Map(), edgeEls = [];
+  function render() {
+    edgeLayer.textContent = ""; nodeLayer.textContent = "";
+    nodeEls = new Map(); edgeEls = [];
+    for (const e of edges) {
+      const g = el("g", { class: "edge " + (e.kind === "extends" ? "extends" : "") + (e.rel && e.rel.derived_by.length ? " derived" : "") });
+      const path = el("path", { "marker-end": e.kind === "extends" ? "url(#triangle)" : "url(#arrow)" });
+      g.appendChild(path);
+      const label = el("text");
+      label.textContent = e.kind === "extends" ? "" : (e.rel.derived_by.length ? "/" : "") + e.rel.name + (e.rel.identifying ? " \u{1F511}" : "");
+      g.appendChild(label);
+      const c1 = el("text", { class: "card" }), c2 = el("text", { class: "card" });
+      if (e.ends) { c1.textContent = e.ends[0]; c2.textContent = e.ends[1]; }
+      g.append(c1, c2);
+      g.addEventListener("mousemove", ev => showTip(ev, edgeTip(e)));
+      g.addEventListener("mouseleave", hideTip);
+      edgeLayer.appendChild(g);
+      edgeEls.push({ e, g, path, label, c1, c2 });
+    }
+    for (const n of nodes) {
+      const k = kind(n.c);
+      const g = el("g", { class: "node", "data-id": n.id });
+      const rect = el("rect", { width: n.w, height: n.h, x: -n.w / 2, y: -n.h / 2,
+        fill: `var(--${k}-bg)`, stroke: `var(--${k})` });
+      if (!n.c.declared) rect.setAttribute("stroke-dasharray", "4 3");
+      const t = el("text", { y: n.sub ? -7 : 0, "font-weight": isEntity(n.c) ? 600 : 400 });
+      t.textContent = n.id;
+      g.append(rect, t);
+      if (n.sub) { const s = el("text", { class: "sub", y: 9 }); s.textContent = n.sub; g.appendChild(s); }
+      g.addEventListener("pointerdown", ev => startDrag(ev, n));
+      g.addEventListener("mousemove", ev => n.c.description ? showTip(ev, esc(n.c.description)) : hideTip());
+      g.addEventListener("mouseleave", hideTip);
+      g.addEventListener("dblclick", ev => { ev.stopPropagation(); n.fixed = false; layoutDirty = true; reheat(0.3); });
+      nodeLayer.appendChild(g);
+      nodeEls.set(n.id, g);
+    }
+    highlight();
+    draw();
+  }
+
+  function draw() {
+    for (const n of nodes) nodeEls.get(n.id).setAttribute("transform", `translate(${n.x},${n.y})`);
+    for (const { e, path, label, c1, c2 } of edgeEls) {
+      const a = nodeById.get(e.source), b = nodeById.get(e.target);
+      let d, lx, ly, p1, p2;
+      if (a === b) {
+        const r = e.bend;
+        p1 = [a.x + a.w / 2, a.y - 4]; p2 = [a.x + a.w / 2 - 12, a.y - a.h / 2];
+        d = `M${p1} C${a.x + a.w / 2 + r},${a.y - r} ${a.x + a.w / 2 - 12 + r / 2},${a.y - a.h / 2 - r} ${p2}`;
+        lx = a.x + a.w / 2 + r * 0.6; ly = a.y - a.h / 2 - r * 0.6;
+      } else {
+        const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
+        const cx = mx - dy / len * e.bend * 2, cy = my + dx / len * e.bend * 2;
+        p1 = clip(a, cx, cy); p2 = clip(b, cx, cy);
+        d = `M${p1[0]},${p1[1]} Q${cx},${cy} ${p2[0]},${p2[1]}`;
+        lx = (p1[0] + 2 * cx + p2[0]) / 4; ly = (p1[1] + 2 * cy + p2[1]) / 4;
+        if (e.ends) {
+          const near = (p, q, t) => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+          const q1 = near(p1, [cx, cy], 18 / (Math.hypot(cx - p1[0], cy - p1[1]) || 1));
+          const q2 = near(p2, [cx, cy], 18 / (Math.hypot(cx - p2[0], cy - p2[1]) || 1));
+          c1.setAttribute("x", q1[0] + 6); c1.setAttribute("y", q1[1] - 6);
+          c2.setAttribute("x", q2[0] + 6); c2.setAttribute("y", q2[1] - 6);
+        }
+      }
+      path.setAttribute("d", d);
+      label.setAttribute("x", lx); label.setAttribute("y", ly);
+    }
+  }
+
+  function fit() {
+    if (!nodes.length) return;
+    const xs = nodes.flatMap(n => [n.x - n.w / 2, n.x + n.w / 2]), ys = nodes.flatMap(n => [n.y - n.h / 2, n.y + n.h / 2]);
+    const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+    const { width, height } = svg.getBoundingClientRect();
+    view.k = Math.min(1.25, 0.92 * Math.min(width / (x1 - x0 || 1), height / (y1 - y0 || 1)));
+    view.x = width / 2 - view.k * (x0 + x1) / 2; view.y = height / 2 - view.k * (y0 + y1) / 2;
+    applyView();
+  }
+
+  // ---------- highlighting ----------
+  function highlight() {
+    const sel = state.selected, q = state.search.toLowerCase();
+    const neighbours = new Set(sel ? [sel] : []);
+    if (sel) for (const e of edges) { if (e.source === sel) neighbours.add(e.target); if (e.target === sel) neighbours.add(e.source); }
+    for (const [id, g] of nodeEls) {
+      g.classList.toggle("selected", id === sel);
+      g.classList.toggle("faded", !!sel && !neighbours.has(id));
+      g.classList.toggle("match", !!q && id.toLowerCase().includes(q));
+    }
+    for (const { e, g } of edgeEls) g.classList.toggle("faded", !!sel && e.source !== sel && e.target !== sel);
+  }
+
+  // ---------- details panel ----------
+  const link = name => {
+    const c = byName.get(name);
+    const cls = !c ? "" : c.builtin ? " b" : isEntity(c) ? "" : " v";
+    return `<a class="c${cls}" data-concept="${esc(name)}">${esc(name)}</a>`;
+  };
+  const verbalize = (v) => esc(v).replace(/(\w)- /g, "$1 ").replace(/\{([^}]+)\}/g, (_, n) => link(n));
+  const exprs = list => list.map(x => `<code class="expr">${esc(x)}</code>`).join("");
+  const badge = c => {
+    const k = kind(c), label = c.builtin ? "built-in " + (isEntity(c) ? "entity type" : "value type")
+      : !c.declared ? "undeclared" : isEntity(c) ? "entity type" : "value type";
+    return `<span class="badge" style="color:var(--${k});border-color:var(--${k});background:var(--${k}-bg)">${label}</span>`;
+  };
+  function relCard(r, owner) {
+    const roles = [owner, ...r.roles.map(x => x.concept)].map((n, i) => {
+      const nm = i > 0 && r.roles[i - 1].name ? ` <span class="muted">(${esc(r.roles[i - 1].name)})</span>` : "";
+      return link(n) + nm;
+    }).join(" × ");
+    const flags = [r.identifying && "identifying", r.derived_by.length && "derived"].filter(Boolean).join(", ");
+    return `<div class="rel"><div class="head"><span>${esc(r.name)}${flags ? ` <span class="muted">(${flags})</span>` : ""}</span>
+      <span class="mult">${esc(r.multiplicity || (r.roles.length ? "" : "unary"))}</span></div>
+      <div>${roles}</div>
+      ${r.verbalizes.map(v => `<div class="verb">${verbalize(v)}</div>`).join("")}
+      ${r.description ? `<div>${esc(r.description)}</div>` : ""}
+      ${r.derived_by.length ? `<div class="muted">derived by</div>${exprs(r.derived_by)}` : ""}
+      ${r.requires.length ? `<div class="muted">requires</div>${exprs(r.requires)}` : ""}
+      ${r.iri ? `<div class="muted">IRI: <code>${esc(r.iri)}</code></div>` : ""}</div>`;
+  }
+  function showSummary() {
+    const cs = model.concepts.filter(c => !c.builtin && c.declared);
+    const rels = cs.reduce((n, c) => n + c.relationships.length, 0);
+    details.innerHTML = `<h2>${esc(model.name)}</h2>
+      ${model.description ? `<p>${esc(model.description)}</p>` : ""}
+      ${sourceSummary()}
+      <table class="stats"><tr><td>Entity types</td><td><b>${cs.filter(isEntity).length}</b></td></tr>
+      <tr><td>Value types</td><td><b>${cs.filter(c => !isEntity(c)).length}</b></td></tr>
+      <tr><td>Relationships</td><td><b>${rels}</b></td></tr></table>
+      ${model.requires.length ? `<h3>Ontology constraints</h3>${exprs(model.requires)}` : ""}
+      <h3>Entity types</h3><ul>${cs.filter(isEntity).map(c => `<li>${link(c.name)}${c.description ? ` <span class="muted">— ${esc(c.description)}</span>` : ""}</li>`).join("")}</ul>
+      <h3>How to use</h3><ul class="muted">
+        <li>Click a concept (or any concept link) to see its relationships.</li>
+        <li>Drag nodes to pin them; double-click to unpin. Drag the background to pan, scroll to zoom.</li>
+        <li>Your arrangement is saved in this browser automatically. The <b>Layout</b> menu saves it to a file you can share or pass to <code>visualize.py --layout</code>, loads one, or resets it.</li>
+        <li><b>Open ontology…</b> (or drop a file on the page) shows another ontology <code>.yaml</code> without regenerating this page. In Edge and Chrome it updates whenever you save the file.</li>
+        <li>Toggle <b>Value types</b> to draw value types and <code>extends</code> hierarchies as nodes.</li>
+        <li>Hover an edge to read its verbalization.</li></ul>`;
+  }
+  function showConcept(name) {
+    const c = byName.get(name);
+    if (!c) return showSummary();
+    const subs = subtypes.get(name) || [], inc = incoming.get(name) || [];
+    details.innerHTML = `<p><a class="c" data-concept="">← ${esc(model.name)} overview</a></p>
+      <h2>${esc(c.name)}</h2>${badge(c)}
+      ${c.description ? `<p>${esc(c.description)}</p>` : ""}
+      ${c.iri ? `<p class="muted">IRI: <code>${esc(c.iri)}</code></p>` : ""}
+      ${c.extends.length ? `<h3>Extends</h3>${c.extends.map(link).join(", ")}` : ""}
+      ${subs.length ? `<h3>Extended by</h3>${subs.map(link).join(", ")}` : ""}
+      ${c.identify_by.length ? `<h3>Identified by</h3>${c.identify_by.map(esc).join(", ")}` : ""}
+      ${c.requires.length ? `<h3>Requires</h3>${exprs(c.requires)}` : ""}
+      ${c.derived_by.length ? `<h3>Derived by</h3>${exprs(c.derived_by)}` : ""}
+      ${c.relationships.length ? `<h3>Relationships (${c.relationships.length})</h3>${c.relationships.map(r => relCard(r, c.name)).join("")}` : ""}
+      ${inc.length ? `<h3>Referenced by (${inc.length})</h3>${inc.map(([o, r]) => relCard(r, o)).join("")}` : ""}
+      ${c.builtin ? `<p class="muted">Built-in concept defined by the Ossie ontology specification.</p>` : ""}
+      ${!c.declared ? `<p class="muted">This concept is referenced but not declared in the ontology.</p>` : ""}`;
+  }
+  function select(name) {
+    state.selected = name && nodeById.has(name) ? name : null;
+    name ? showConcept(name) : showSummary();
+    highlight();
+  }
+  details.addEventListener("click", ev => {
+    const a = ev.target.closest("a[data-concept]");
+    if (!a) return;
+    const name = a.dataset.concept;
+    select(name || null);
+    const n = nodeById.get(name);
+    if (n) centerOn(n);
+  });
+  function centerOn(n) {
+    const { width, height } = svg.getBoundingClientRect();
+    view.x = width / 2 - n.x * view.k; view.y = height / 2 - n.y * view.k; applyView();
+  }
+
+  // ---------- tooltips ----------
+  function edgeTip(e) {
+    if (e.kind === "extends") return `${esc(e.source)} extends ${esc(e.target)}`;
+    const v = e.rel.verbalizes.length ? e.rel.verbalizes.map(x => esc(x).replace(/(\w)- /g, "$1 ")).join("<br>") : esc(e.rel.name);
+    return v + (e.rel.multiplicity ? `<br><span style="opacity:.7">${esc(e.rel.multiplicity)}</span>` : "");
+  }
+  function showTip(ev, htmlText) {
+    const box = $("canvas").getBoundingClientRect();
+    tooltip.innerHTML = htmlText; tooltip.style.display = "block";
+    tooltip.style.left = (ev.clientX - box.left + 14) + "px"; tooltip.style.top = (ev.clientY - box.top + 14) + "px";
+  }
+  function hideTip() { tooltip.style.display = "none"; }
+
+  // ---------- interaction ----------
+  let drag = null;
+  function toWorld(ev) { const r = svg.getBoundingClientRect(); return [(ev.clientX - r.left - view.x) / view.k, (ev.clientY - r.top - view.y) / view.k]; }
+  function startDrag(ev, n) {
+    ev.stopPropagation();
+    const [wx, wy] = toWorld(ev);
+    drag = { n, dx: n.x - wx, dy: n.y - wy, moved: false, sx: ev.clientX, sy: ev.clientY };
+    svg.setPointerCapture(ev.pointerId);
+  }
+  svg.addEventListener("pointerdown", ev => {
+    if (drag) return;
+    drag = { pan: true, sx: ev.clientX, sy: ev.clientY, vx: view.x, vy: view.y, moved: false };
+    svg.classList.add("panning");
+    svg.setPointerCapture(ev.pointerId);
+  });
+  svg.addEventListener("pointermove", ev => {
+    if (!drag) return;
+    if (Math.hypot(ev.clientX - drag.sx, ev.clientY - drag.sy) > 3) drag.moved = true;
+    if (drag.pan) { view.x = drag.vx + ev.clientX - drag.sx; view.y = drag.vy + ev.clientY - drag.sy; applyView(); return; }
+    if (!drag.moved) return;
+    const [wx, wy] = toWorld(ev);
+    drag.n.x = wx + drag.dx; drag.n.y = wy + drag.dy; drag.n.fixed = true;
+    hideTip(); draw(); reheat(0.15);
+  });
+  svg.addEventListener("pointerup", () => {
+    if (drag && !drag.moved) select(drag.pan ? null : drag.n.id);
+    if (drag && !drag.pan && drag.moved) { layoutDirty = true; savePositions(); persistLayout(); }
+    drag = null; svg.classList.remove("panning");
+  });
+  svg.addEventListener("wheel", ev => {
+    ev.preventDefault();
+    const r = svg.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top;
+    const k = Math.max(0.1, Math.min(4, view.k * Math.exp(-ev.deltaY * 0.0015)));
+    view.x = px - (px - view.x) * k / view.k; view.y = py - (py - view.y) * k / view.k; view.k = k;
+    applyView();
+  }, { passive: false });
+
+  function rebuild(layoutIterations) {
+    savePositions();
+    buildGraph();
+    if (layoutIterations) { alpha = 1; settle(layoutIterations); }
+    render();
+    if (state.selected && !nodeById.has(state.selected)) select(null);
+  }
+
+  // ---------- status messages ----------
+  let statusTimer = 0;
+  function setStatus(text, { error = false, sticky = false } = {}) {
+    const s = $("status");
+    s.textContent = text;
+    s.classList.toggle("error", error);
+    clearTimeout(statusTimer);
+    if (!sticky) statusTimer = setTimeout(() => { s.textContent = ""; s.classList.remove("error"); }, 4000);
+  }
+
+  // ---------- saving and restoring layouts ----------
+  // Positions are kept per ontology name in localStorage and can be exported/imported as JSON.
+  // A layout passed to visualize.py --layout is embedded in the page; the newer of the two wins.
+  let layoutDirty = false;
+  const pageLayout = () => model.name === builtinModel.name ? embeddedLayout : null;
+  function readStoredLayout() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; }
+  }
+  function layoutDocument() {
+    savePositions();
+    const out = {};
+    for (const [name, p] of [...positions].sort(([a], [b]) => a.localeCompare(b)))
+      out[name] = { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10, pinned: !!p.fixed };
+    return { format: "ossie-ontology-layout", version: 1, ontology: model.name, saved_at: new Date().toISOString(), nodes: out };
+  }
+  function persistLayout(announce = true) {
+    if (!layoutDirty) return;
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(layoutDocument())); if (announce) setStatus("Layout saved in this browser"); }
+    catch { setStatus("This browser blocked saving; use Layout › Save layout instead"); }
+  }
+  function applyLayout(doc) {
+    clearPositions();
+    for (const [name, p] of Object.entries(doc.nodes || {}))
+      if (byName.has(name) && Number.isFinite(p.x) && Number.isFinite(p.y))
+        positions.set(name, { x: p.x, y: p.y, fixed: p.pinned !== false });
+  }
+  function clearPositions() {
+    // Drop the on-screen nodes too, otherwise rebuild() would save their old positions back.
+    positions.clear();
+    nodes = [];
+  }
+  function startLayout() {
+    const placed = model.concepts.filter(visible).every(c => positions.has(c.name));
+    if (placed) { rebuild(0); alpha = 0; } else rebuild(400);
+    fit();
+  }
+  // Restores the browser-saved or built-in layout for the current ontology; true if browser-saved.
+  function initialLayout() {
+    const stored = readStoredLayout(), built = pageLayout();
+    const useStored = !!(stored && stored.nodes &&
+      (!built || String(stored.saved_at || "") >= String(built.saved_at || "")));
+    const doc = useStored ? stored : built;
+    if (doc) applyLayout(doc);
+    startLayout();
+    return useStored;
+  }
+  async function loadLayoutFile(file) {
+    let doc;
+    try { doc = JSON.parse(await file.text()); } catch { return setStatus(file.name + " is not valid JSON", { error: true }); }
+    if (!doc || typeof doc.nodes !== "object") return setStatus(file.name + " has no 'nodes' positions", { error: true });
+    applyLayout(doc);
+    layoutDirty = true;
+    startLayout();
+    persistLayout(false);
+    setStatus("Loaded " + file.name + (doc.ontology && doc.ontology !== model.name ? ` (saved for '${doc.ontology}')` : ""));
+  }
+
+  $("saveLayout").addEventListener("click", () => {
+    const blob = new Blob([JSON.stringify(layoutDocument(), null, 2) + "\n"], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = (model.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "ontology") + ".layout.json";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    setStatus("Downloaded " + a.download);
+  });
+  $("loadLayout").addEventListener("click", () => $("layoutFile").click());
+  $("layoutFile").addEventListener("change", ev => {
+    const file = ev.target.files[0];
+    ev.target.value = "";
+    if (file) loadLayoutFile(file);
+  });
+  $("relayout").addEventListener("click", () => {
+    try { localStorage.removeItem(STORAGE_KEY); } catch { /* storage unavailable */ }
+    layoutDirty = false;
+    clearPositions();
+    const built = pageLayout();
+    if (built) applyLayout(built);
+    startLayout();
+    setStatus(built ? "Reset to the layout built into this page" : "Reset to the automatic layout");
+  });
+
+  // ---------- Layout menu ----------
+  const menu = $("layoutItems"), menuButton = $("layoutButton");
+  const menuItems = () => [...menu.querySelectorAll('[role="menuitem"]')];
+  function openMenu() {
+    menu.hidden = false;
+    menuButton.setAttribute("aria-expanded", "true");
+    menuItems()[0].focus();
+  }
+  function closeMenu(focusButton = false) {
+    if (menu.hidden) return;
+    menu.hidden = true;
+    menuButton.setAttribute("aria-expanded", "false");
+    if (focusButton) menuButton.focus();
+  }
+  menuButton.addEventListener("click", () => menu.hidden ? openMenu() : closeMenu());
+  menu.addEventListener("click", ev => { if (ev.target.closest('[role="menuitem"]')) closeMenu(); });
+  menu.addEventListener("keydown", ev => {
+    const items = menuItems(), at = items.indexOf(document.activeElement);
+    if (ev.key === "Escape") { ev.preventDefault(); closeMenu(true); }
+    else if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+      ev.preventDefault();
+      items[(at + (ev.key === "ArrowDown" ? 1 : items.length - 1)) % items.length].focus();
+    } else if (ev.key === "Tab") closeMenu();
+  });
+  document.addEventListener("pointerdown", ev => { if (!$("layoutMenu").contains(ev.target)) closeMenu(); }, true);
+
+  // ---------- opening ontology files ----------
+  // An opened file replaces the built-in ontology without regenerating the page. With the File
+  // System Access API (Edge, Chrome) the page keeps a handle to the file and re-reads it whenever
+  // it changes. The last opened file survives a reload of this tab (sessionStorage + IndexedDB).
+  const OPENED_KEY = "ossie-ontology-opened:" + builtinModel.name;
+  const canPickFiles = typeof window.showOpenFilePicker === "function";
+  let current = { name: builtinModel.source, opened: false, handle: null };
+  let watcher = null;
+
+  function sourceSummary() {
+    if (!current.name) return "";
+    if (!current.opened) return `<p class="muted">Built from <code>${esc(current.name)}</code>.</p>`;
+    return `<p class="muted">Opened from <code>${esc(current.name)}</code>${watcher ? "; updates when the file is saved" : ""}.</p>`;
+  }
+  function renderSource() {
+    const s = $("source");
+    s.hidden = !current.opened;
+    if (!current.opened) { s.textContent = ""; return; }
+    s.innerHTML = `<span>📄 ${esc(current.name)}</span>`
+      + (watcher ? `<span class="live" title="Reloads automatically when the file is saved">live</span>` : "")
+      + (!watcher && current.handle ? `<button id="resumeWatch" title="Allow this page to read the file again">Resume live updates</button>` : "")
+      + `<button id="closeOpened" title="Go back to the ontology built into this page" aria-label="Close ${esc(current.name)}">✕</button>`;
+    if (!state.selected) showSummary();
+  }
+  $("source").addEventListener("click", ev => {
+    if (ev.target.id === "closeOpened") closeOpened();
+    else if (ev.target.id === "resumeWatch") resumeWatching();
+  });
+
+  // Swap in a new model. Positions carry over when it is the same ontology (e.g. a reload).
+  function showOntology(m) {
+    const same = m.name === model.name;
+    savePositions();
+    if (!same) { clearPositions(); layoutDirty = false; }
+    setModel(m);
+    if (same) {
+      const unplaced = model.concepts.filter(visible).some(c => !positions.has(c.name));
+      rebuild(0);
+      if (unplaced) reheat(0.4);
+    } else initialLayout();
+    select(state.selected && byName.has(state.selected) ? state.selected : null);
+  }
+  function parseOntology(text, name) {
+    try { return OssieOntology.fromText(text, name); }
+    catch (e) { throw new Error(`Could not read ${name}: ${e.message}`); }
+  }
+  function remember(name, text, handle) {
+    try { sessionStorage.setItem(OPENED_KEY, JSON.stringify({ name, text })); } catch { /* storage unavailable */ }
+    idbPut(OPENED_KEY, handle);
+  }
+  function forget() {
+    try { sessionStorage.removeItem(OPENED_KEY); } catch { /* storage unavailable */ }
+    idbPut(OPENED_KEY, null);
+  }
+  async function openFile(file, handle = null) {
+    const text = await file.text();
+    let m;
+    try { m = parseOntology(text, file.name); }
+    catch (e) { setStatus(e.message, { error: true, sticky: true }); return false; }
+    stopWatching();
+    current = { name: file.name, opened: true, handle };
+    showOntology(m);
+    remember(file.name, text, handle);
+    if (handle) startWatching(handle, file.lastModified);
+    renderSource();
+    setStatus(`Opened ${file.name}` + (handle ? "; it updates whenever you save the file" : ""));
+    return true;
+  }
+  function startWatching(handle, lastModified) {
+    const w = { handle, lastModified, busy: false };
+    w.timer = setInterval(async () => {
+      if (w.busy || watcher !== w) return;
+      w.busy = true;
+      try {
+        const file = await handle.getFile();
+        if (watcher !== w || file.lastModified === w.lastModified) return;
+        w.lastModified = file.lastModified;
+        const text = await file.text();
+        let m;
+        try { m = parseOntology(text, file.name); }
+        catch (e) { setStatus(e.message, { error: true, sticky: true }); return; }
+        showOntology(m);
+        remember(file.name, text, handle);
+        setStatus(`Reloaded ${file.name}`);
+      } catch (e) {
+        if (watcher !== w) return;
+        stopWatching();
+        renderSource();
+        setStatus(`Stopped updating ${current.name}: ${e.message}`, { error: true, sticky: true });
+      } finally { w.busy = false; }
+    }, 1000);
+    watcher = w;
+  }
+  function stopWatching() {
+    if (watcher) clearInterval(watcher.timer);
+    watcher = null;
+  }
+  function closeOpened() {
+    stopWatching();
+    forget();
+    current = { name: builtinModel.source, opened: false, handle: null };
+    showOntology(builtinModel);
+    renderSource();
+    showSummary();
+    setStatus("Showing the ontology built into this page");
+  }
+  async function resumeWatching() {
+    const handle = current.handle;
+    if (!handle) return;
+    try {
+      if ((await handle.requestPermission({ mode: "read" })) !== "granted")
+        return setStatus("Permission to read the file was not granted", { error: true });
+      await openFile(await handle.getFile(), handle);
+    } catch (e) { setStatus(`Could not read ${current.name}: ${e.message}`, { error: true, sticky: true }); }
+  }
+  async function restoreOpened() {
+    let saved = null;
+    try { saved = JSON.parse(sessionStorage.getItem(OPENED_KEY)); } catch { /* storage unavailable */ }
+    if (!saved || typeof saved.text !== "string") return;
+    const handle = await idbGet(OPENED_KEY);
+    try {
+      if (handle && (await handle.queryPermission({ mode: "read" })) === "granted" &&
+          await openFile(await handle.getFile(), handle)) return;
+    } catch { /* fall back to the saved text */ }
+    let m;
+    try { m = parseOntology(saved.text, saved.name); } catch { return; }
+    current = { name: saved.name, opened: true, handle: handle || null };
+    showOntology(m);
+    renderSource();
+    setStatus(`Showing ${saved.name} as it was before the page reloaded` +
+      (handle ? "; click Resume live updates to follow changes" : ""));
+  }
+
+  $("openOntology").addEventListener("click", async () => {
+    if (!canPickFiles) return $("ontologyFile").click();
+    let handle;
+    try {
+      [handle] = await window.showOpenFilePicker({ types: [{ description: "Ossie ontology",
+        accept: { "application/x-yaml": [".yaml", ".yml"], "application/json": [".json"] } }] });
+    } catch (e) {
+      if (e.name !== "AbortError") $("ontologyFile").click();
+      return;
+    }
+    await openFile(await handle.getFile(), handle);
+  });
+  $("ontologyFile").addEventListener("change", ev => {
+    const file = ev.target.files[0];
+    ev.target.value = "";
+    if (file) openFile(file);
+  });
+
+  // Drop an ontology (or a .layout.json file) anywhere on the page.
+  const hasFiles = ev => [...(ev.dataTransfer?.types || [])].includes("Files");
+  let dragDepth = 0;
+  document.addEventListener("dragenter", ev => { if (hasFiles(ev)) { dragDepth++; document.body.classList.add("dropping"); } });
+  document.addEventListener("dragleave", ev => {
+    if (hasFiles(ev) && --dragDepth <= 0) { dragDepth = 0; document.body.classList.remove("dropping"); }
+  });
+  document.addEventListener("dragover", ev => { if (hasFiles(ev)) ev.preventDefault(); });
+  document.addEventListener("drop", async ev => {
+    if (!hasFiles(ev)) return;
+    ev.preventDefault();
+    dragDepth = 0;
+    document.body.classList.remove("dropping");
+    const item = [...ev.dataTransfer.items].find(it => it.kind === "file");
+    if (!item) return;
+    // getAsFileSystemHandle() must be called synchronously, before the drop event finishes.
+    const pendingHandle = item.getAsFileSystemHandle ? item.getAsFileSystemHandle() : null;
+    const file = item.getAsFile();
+    let handle = null;
+    try { handle = pendingHandle ? await pendingHandle : null; } catch { /* not available */ }
+    if (handle && handle.kind !== "file") handle = null;
+    if (/\.json$/i.test(file.name)) {
+      try {
+        if (JSON.parse(await file.text())?.format === "ossie-ontology-layout") return loadLayoutFile(file);
+      } catch { /* not JSON: let openFile report it */ }
+    }
+    openFile(file, handle);
+  });
+
+  // File handles can't go in sessionStorage, so they are kept in IndexedDB.
+  function idb(mode, action) {
+    return new Promise(resolve => {
+      let open;
+      try { open = indexedDB.open("ossie-ontology-viewer", 1); } catch { return resolve(null); }
+      open.onupgradeneeded = () => open.result.createObjectStore("handles");
+      open.onerror = () => resolve(null);
+      open.onsuccess = () => {
+        const db = open.result;
+        try {
+          const tx = db.transaction("handles", mode), request = action(tx.objectStore("handles"));
+          tx.oncomplete = () => { db.close(); resolve(request.result ?? null); };
+          tx.onerror = tx.onabort = () => { db.close(); resolve(null); };
+        } catch { db.close(); resolve(null); }
+      };
+    });
+  }
+  const idbGet = key => idb("readonly", store => store.get(key));
+  const idbPut = (key, value) => idb("readwrite", store => value ? store.put(value, key) : store.delete(key));
+
+  $("showValues").addEventListener("change", ev => { state.showValues = ev.target.checked; rebuild(0); reheat(0.6); });
+  $("showBuiltins").addEventListener("change", ev => { state.showBuiltins = ev.target.checked; if (state.showValues) { rebuild(0); reheat(0.5); } });
+  $("showLabels").addEventListener("change", ev => svg.classList.toggle("hide-labels", !ev.target.checked));
+  $("fit").addEventListener("click", fit);
+  $("search").addEventListener("input", ev => { state.search = ev.target.value.trim(); highlight(); });
+  $("search").addEventListener("keydown", ev => {
+    if (ev.key !== "Enter" || !state.search) return;
+    const q = state.search.toLowerCase();
+    const hit = nodes.find(n => n.id.toLowerCase() === q) || nodes.find(n => n.id.toLowerCase().includes(q));
+    if (hit) { select(hit.id); centerOn(hit); }
+  });
+  window.addEventListener("resize", fit);
+
+  const restoredLayout = initialLayout();
+  showSummary();
+  savePositions();
+  if (restoredLayout) setStatus("Restored your saved layout");
+  restoreOpened();
+  // Small scripting hook, used by the tests and handy for automation.
+  window.ossieViewer = {
+    openText: (text, name = "ontology.yaml") => openFile(new File([text], name)),
+    openHandle: handle => handle.getFile().then(file => openFile(file, handle)),
+    get model() { return model; },
+  };
+})();
+</script>
+</body>
+</html>

@@ -26,6 +26,7 @@
 1. [Enumerations](#enumerations)
 2. [Ontology](#ontologies)
 3. [Ontology mappings](#ontology-mappings)
+4. [Visualizing an ontology](#visualizing-an-ontology)
 
 ---
 
@@ -685,6 +686,23 @@ level 3. Each node maps fields of the `METRICS` dataset to links of four differe
 and notice how the mapping to `Item` objects is declared once even though `Item` plays a role in
 all four of the relationships and that the mapping to `Store` objects is declared once even
 though `Store` plays a role in three of the relationships.
+
+## Visualizing an ontology
+
+[`visualize/`](visualize/) contains a tool that renders any ontology document as a
+self-contained, interactive HTML page. It needs no network access or extra software; open the
+page in any browser:
+
+```bash
+uv run ontology/visualize/visualize.py examples/flights.ontology.yaml --open
+```
+
+Entity types are drawn as nodes and relationships as labelled edges. Click a concept to see its
+relationships, verbalizations, and constraints. **Open ontology…** shows another ontology file in
+the same page without regenerating it, and in Edge and Chrome it redraws whenever the file is
+saved. Node positions you arrange are saved and can be exported and built back into the page with
+`--layout`. See the [visualizer README](visualize/README.md) for all options, including Graphviz
+output.
 
 ## Version History
 

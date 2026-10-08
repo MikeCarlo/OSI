@@ -74,6 +74,9 @@ jobs:
       - name: Run validation pytest tests
         run: uv run --with pytest --with pyyaml --with jsonschema --with sqlglot -m pytest validation/tests/
 
+      - name: Run ontology visualizer tests
+        run: uv run --with pytest --with pyyaml -m pytest ontology/visualize/tests/
+
       - name: Run shared Python model tests
         run: uv run --with pytest --with jsonschema --with ./python -m pytest python/tests/
 
