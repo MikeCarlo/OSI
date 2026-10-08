@@ -17,34 +17,36 @@
   under the License.
 -->
 
-# Ontology visualizer
+# Ontology viewer
 
-Renders an [Ossie ontology](../ontology.md) as an interactive diagram.
-
-| File | Purpose |
-|------|---------|
-| [`visualize.py`](visualize.py) | Command-line tool. Reads an ontology YAML/JSON file and writes the diagram |
-| [`template.html`](template.html) | The viewer page (HTML, CSS and plain JavaScript) that `visualize.py` fills in. Includes a small YAML reader so the page can open ontology files itself |
-| [`tests/`](tests/) | Tests for the tool |
+[`ontology-viewer.html`](ontology-viewer.html) shows an [Ossie ontology](../ontology.md) as an
+interactive diagram. It is a single, self-contained HTML file: there is nothing to install,
+build or run, and it works offline.
 
 ## Usage
 
-```bash
-uv run ontology/visualize/visualize.py examples/flights.ontology.yaml --open   # writes flights.ontology.html
-uv run ontology/visualize/visualize.py examples/flights.ontology.yaml -o docs/flights.html
-```
+1. Open `ontology-viewer.html` in a browser, for example by double-clicking it. You can also copy
+   the file anywhere or send it to someone; it doesn't need the rest of the repository.
+2. Click **Open ontology…** and pick an ontology `.yaml` or `.json` file, such as
+   [`examples/flights.ontology.yaml`](../../examples/flights.ontology.yaml). You can also drop the
+   file onto the page.
 
-The output is one self-contained HTML file. It uses no external libraries and makes no network
-requests, so you can open it in any browser, offline, or send it to someone. The only Python
-dependency is PyYAML.
+Files are read by the page on your computer and never uploaded.
 
-| Option | Description |
-|--------|-------------|
-| `-o, --output FILE` | Output file (`-` for stdout). Defaults to `<ontology file name>.html` |
-| `-f, --format {html,dot}` | Output format. Inferred from the `--output` extension, otherwise `html` |
-| `--value-types {inline,nodes}` | Start with value types listed as attributes (`inline`, default) or drawn as nodes |
-| `--layout FILE` | Build node positions saved from the viewer into the page (see [Saving a layout](#saving-a-layout)) |
-| `--open` | Open the generated page in a web browser |
+**Live updates (Edge, Chrome):**
+- The page keeps watching the file you opened. It redraws within about a second every time you
+  save it, keeping your node positions. A green **live** label next to the file name shows that it
+  is watching.
+- If you save the file while it is broken (for example half-typed YAML), the error appears in red
+  with its line number. The last good version stays on screen until you fix it.
+
+**Other browsers** (Firefox, Safari) read the file once. Open it again to see later changes.
+
+**Coming back later:**
+- The page reopens the last ontology you opened.
+- In Edge and Chrome, click **Resume live updates** to keep watching the file; the browser asks
+  for permission again after the page is closed.
+- Click **✕** next to the file name to close the ontology.
 
 ## Reading the diagram
 
@@ -54,62 +56,32 @@ dependency is PyYAML.
 - Click a concept to see its description, `extends` hierarchy, identifiers, constraints,
   relationships with their verbalizations, and the relationships that reference it.
 - **Value types** draws value types (green) and their `extends` chains (purple arrows) as nodes.
-  **Built-ins** adds built-in concepts like `String`.
+  With value types on, **Built-ins** adds the built-in concepts they end in, such as `String` and
+  `Integer` (gray).
 - Search with the box at the top, drag the background to pan, and scroll to zoom. Hover an arrow
   to read its verbalization.
 
-## Opening an ontology without regenerating the page
+## Arranging the diagram
 
-**Open ontology…** loads an ontology `.yaml` or `.json` file straight into any generated page. You
-can also drop the file onto the page. You only need to run `visualize.py` once.
+Drag a node to pin it where you want it; double-click it to unpin it. Your arrangement is saved in
+the browser (per ontology name) every time you move a node, and comes back the next time you open
+that ontology.
 
-- **Live updates (Edge, Chrome):** the page keeps watching the file you opened and redraws within
-  about a second each time you save it, keeping your node positions. A green **live** label next
-  to the file name shows it is watching. If you save the file while it is broken (for example
-  half-typed YAML), the error appears in red with its line number and the last good version stays
-  on screen until you fix it.
-- **Other browsers** (Firefox, Safari) open the file once. Open it again to see later changes.
-- The opened file stays on screen if you refresh the tab. After a refresh, click
-  **Resume live updates** to keep watching it, since browsers ask for permission again.
-- Click **✕** next to the file name to go back to the ontology built into the page.
+The **Layout** menu has:
+- **Save layout**, which downloads the positions as `<ontology>.layout.json` so you can share them.
+- **Load layout…**, which applies such a file. Dropping a `.layout.json` file on the page does the
+  same.
+- **Reset layout**, which discards the arrangement and lays the diagram out again.
 
-The page reads YAML itself, with no libraries. It supports the YAML used by Ossie documents:
-nested mappings and lists, `[...]`/`{...}` collections (also across lines), quoted and unquoted
-text, `|` and `>` text blocks, and comments. Anchors (`&`/`*`), tags (`!`) and multiple documents
-in one file are reported as errors. Generated pages read YAML with PyYAML; the tests check that
-both readers agree on the example files and on a set of edge cases.
+## Supported YAML
 
-## Saving a layout
+The page reads YAML itself, without libraries. It supports what Ossie documents use:
+- nested mappings and lists;
+- `[...]` and `{...}` collections, also across several lines;
+- quoted and unquoted text, and `|` and `>` text blocks;
+- comments.
 
-Drag a node to pin it where you want it. Double-click it to unpin it.
-
-- **Automatically:** your arrangement is saved in the browser (`localStorage`, per ontology name)
-  every time you move a node. It comes back when you reopen the page, even after regenerating it.
-- The **Layout** menu has:
-  - **Save layout**, which downloads the positions as `<ontology>.layout.json`.
-  - **Load layout…**, which applies such a file. Dropping a `.layout.json` file on the page does
-    the same.
-  - **Reset layout**, which discards the saved arrangement and returns to the automatic layout,
-    or to the layout built into the page.
-
-To share an arrangement, build it into the generated page so everyone who opens it sees the same
-layout:
-
-```bash
-uv run ontology/visualize/visualize.py examples/flights.ontology.yaml --layout flights.layout.json
-```
-
-Concepts missing from the layout file are placed automatically, and concepts in the file that no
-longer exist in the ontology are ignored with a warning. If the browser also has a saved
-arrangement, the more recently saved one wins.
-
-## Static diagrams with Graphviz
-
-`-f dot` writes a Graphviz digraph instead. Render it with [Graphviz](https://graphviz.org/):
-
-```bash
-uv run ontology/visualize/visualize.py examples/flights.ontology.yaml -f dot | dot -Tsvg > flights.svg
-```
+Anchors (`&`/`*`), tags (`!`) and multiple documents in one file are reported as errors.
 
 ## Tests
 
@@ -117,7 +89,10 @@ uv run ontology/visualize/visualize.py examples/flights.ontology.yaml -f dot | d
 uv run --with pytest --with pyyaml -m pytest ontology/visualize/tests
 ```
 
-`tests/test_viewer_js.py` runs the page's JavaScript in headless Chrome, Edge or Chromium. It
-compares the YAML reader with PyYAML, and the browser's ontology parsing with `visualize.py`'s,
-and exercises the Layout menu, opening files and live updates. It is skipped when no browser is
-found; set `OSSIE_TEST_BROWSER` to the browser executable to choose one.
+The tests run the page in headless Chrome, Edge or Chromium. They check:
+- the YAML reader against PyYAML, using the example files and edge cases;
+- how the page interprets ontology documents;
+- the user interface, including opening, live updates, closing, the Layout menu and toggles.
+
+They are skipped when no browser is found. Set `OSSIE_TEST_BROWSER` to the browser executable to
+choose one.

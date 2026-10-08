@@ -17,14 +17,14 @@
   specific language governing permissions and limitations
   under the License.
 
-  Interactive ontology viewer. ontology/visualize/visualize.py fills in the
-  __PLACEHOLDERS__ below to generate a self-contained page for one ontology.
+  Apache Ossie ontology viewer: a single, self-contained page. Open it in a browser, then
+  open (or drop) an ontology .yaml/.json file. No server, build step or network access needed.
 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>__TITLE__ ontology</title>
+<title>Ossie ontology viewer</title>
 <style>
   :root {
     --entity: #1e88e5; --entity-bg: #e3f2fd;
@@ -41,6 +41,8 @@
   header { grid-column: 1 / 3; display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 8px 14px; border-bottom: 1px solid var(--border); background: #fafbfc; }
   header h1 { font-size: 16px; margin: 0 8px 0 0; }
   header label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; user-select: none; }
+  header label.disabled { color: #b0bec5; cursor: not-allowed; }
+  header label.disabled input { cursor: not-allowed; }
   header input[type=search] { padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; width: 200px; }
   header button { padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px; background: white; cursor: pointer; }
   header button:hover { background: #f1f3f4; }
@@ -57,6 +59,11 @@
   .source .live::before { content: "● "; }
   header .source button { padding: 0 6px; border: 0; border-radius: 10px; font-size: 12px; }
   body.dropping #canvas { outline: 3px dashed var(--entity); outline-offset: -8px; }
+  .empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px; text-align: center; }
+  .empty h2 { margin: 0; font-size: 22px; }
+  .empty p { margin: 0; max-width: 460px; }
+  .empty button.primary { margin: 10px 0 6px; padding: 8px 18px; font: inherit; font-size: 14px; color: white; background: var(--entity); border: 0; border-radius: 6px; cursor: pointer; }
+  .empty button.primary:hover { filter: brightness(1.08); }
   .legend span { display: inline-flex; align-items: center; gap: 4px; }
   .swatch { width: 12px; height: 12px; border-radius: 3px; border: 2px solid; display: inline-block; }
   #canvas { position: relative; overflow: hidden; background: radial-gradient(circle, #e0e6ea 1px, transparent 1px) 0 0 / 22px 22px; }
@@ -101,7 +108,7 @@
   <h1 id="title"></h1>
   <input type="search" id="search" placeholder="Search concepts…" aria-label="Search concepts">
   <label><input type="checkbox" id="showValues"> Value types</label>
-  <label><input type="checkbox" id="showBuiltins"> Built-ins</label>
+  <label id="builtinsLabel"><input type="checkbox" id="showBuiltins"> Built-ins</label>
   <label><input type="checkbox" id="showLabels" checked> Edge labels</label>
   <button id="fit" title="Zoom to fit">Fit</button>
   <button id="openOntology" title="Open an ontology .yaml or .json file (or drop one on the page). In Edge and Chrome the page reloads it automatically whenever the file is saved.">Open ontology…</button>
@@ -138,10 +145,15 @@
     <g id="viewport"><g id="edges"></g><g id="nodes"></g></g>
   </svg>
   <div id="tooltip"></div>
+  <div id="empty" class="empty">
+    <h2>Ossie ontology viewer</h2>
+    <p>Open an Apache Ossie ontology (<code>.yaml</code> or <code>.json</code>) to see it as an interactive diagram.</p>
+    <button id="emptyOpen" class="primary">Open ontology…</button>
+    <p class="muted">or drop the file anywhere on this page, for example <code>examples/flights.ontology.yaml</code>.</p>
+    <p class="muted">The file is read by this page on your computer and is never uploaded.</p>
+  </div>
 </div>
 <aside id="details"></aside>
-<script id="ontology-data" type="application/json">__DATA__</script>
-<script id="ontology-layout" type="application/json">__LAYOUT__</script>
 <script id="ossie-yaml">
 // Reader for the YAML subset used by Ossie documents: block mappings and sequences, flow
 // collections ([...] and {...}, possibly spanning lines), plain/quoted scalars, block scalars
@@ -457,8 +469,8 @@ const OssieYaml = (() => {
 })();
 </script>
 <script id="ossie-ontology">
-// Interprets a parsed ontology document the same way as parse_ontology() and to_json_model() in
-// visualize.py, so ontologies opened in the browser match generated pages.
+// Interprets a parsed ontology document (see ontology/ontology.md) as the viewer's model: concepts
+// with their relationships, plus the built-in or undeclared concepts they refer to.
 const OssieOntology = (() => {
   "use strict";
   const BUILTINS = { Any: "EntityType", Boolean: "ValueType", Date: "ValueType", DateTime: "ValueType",
@@ -532,22 +544,30 @@ const OssieOntology = (() => {
 <script>
 (() => {
   "use strict";
-  const builtinModel = JSON.parse(document.getElementById("ontology-data").textContent);
-  const embeddedLayout = JSON.parse(document.getElementById("ontology-layout").textContent);
   const SVG_NS = "http://www.w3.org/2000/svg";
   const $ = id => document.getElementById(id);
   const svg = $("svg"), viewport = $("viewport"), edgeLayer = $("edges"), nodeLayer = $("nodes");
   const details = $("details"), tooltip = $("tooltip");
-  const state = { showValues: __SHOW_VALUE_TYPES__, showBuiltins: false, selected: null, search: "" };
+  const state = { showValues: false, showBuiltins: false, selected: null, search: "" };
   $("showValues").checked = state.showValues;
+  // Built-ins are value types, so their checkbox only applies while value types are shown.
+  function syncBuiltinsToggle() {
+    const enabled = state.showValues;
+    $("showBuiltins").disabled = !enabled;
+    $("builtinsLabel").classList.toggle("disabled", !enabled);
+    $("builtinsLabel").title = enabled
+      ? "Show built-in concepts such as String and Integer"
+      : "Turn on Value types to show built-in concepts such as String and Integer";
+  }
+  syncBuiltinsToggle();
 
   const isEntity = c => c.type === "EntityType";
   const kind = c => c.builtin ? "builtin" : !c.declared ? "unknown" : isEntity(c) ? "entity" : "value";
   const esc = s => String(s ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
   const el = (tag, attrs = {}) => { const e = document.createElementNS(SVG_NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; };
 
-  // The ontology on screen. It starts as the one built into the page and can be replaced by
-  // opening a file (see "opening ontology files" below).
+  // The ontology on screen: EMPTY until a file is opened (see "opening ontology files" below).
+  const EMPTY = { name: "", description: null, requires: [], concepts: [] };
   let model, byName, subtypes, incoming, STORAGE_KEY;
   function setModel(m) {
     model = m;
@@ -560,10 +580,12 @@ const OssieOntology = (() => {
         if (role.concept !== c.name) (incoming.get(role.concept) || incoming.set(role.concept, []).get(role.concept)).push([c.name, r]);
     }
     STORAGE_KEY = "ossie-ontology-layout:" + model.name;
-    $("title").textContent = model.name;
-    document.title = model.name + " ontology";
+    const empty = model === EMPTY;
+    $("empty").hidden = !empty;
+    $("title").textContent = empty ? "Ossie ontology viewer" : model.name;
+    document.title = empty ? "Ossie ontology viewer" : `${model.name} – Ossie ontology viewer`;
   }
-  setModel(builtinModel);
+  setModel(EMPTY);
 
   function visible(c) {
     if (isEntity(c) && c.declared) return true;
@@ -835,7 +857,21 @@ const OssieOntology = (() => {
       ${r.requires.length ? `<div class="muted">requires</div>${exprs(r.requires)}` : ""}
       ${r.iri ? `<div class="muted">IRI: <code>${esc(r.iri)}</code></div>` : ""}</div>`;
   }
+  const HOW_TO = `<h3>How to use</h3><ul class="muted">
+        <li><b>Open ontology…</b> (or drop a file on the page) to show an ontology <code>.yaml</code> or <code>.json</code>. In Edge and Chrome the diagram updates whenever you save the file.</li>
+        <li>Click a concept (or any concept link) to see its relationships.</li>
+        <li>Drag nodes to pin them; double-click to unpin. Drag the background to pan, scroll to zoom.</li>
+        <li>Your arrangement is saved in this browser automatically. The <b>Layout</b> menu saves it to a file you can share, loads one, or resets it.</li>
+        <li>Toggle <b>Value types</b> to draw value types and <code>extends</code> hierarchies as nodes.</li>
+        <li>Hover an edge to read its verbalization.</li></ul>`;
   function showSummary() {
+    if (model === EMPTY) {
+      details.innerHTML = `<h2>Ossie ontology viewer</h2>
+        <p>Shows an <a href="https://github.com/apache/ossie" target="_blank" rel="noopener">Apache Ossie</a> ontology
+        as a diagram: entity types, value types, their relationships and the rules attached to them.</p>
+        <p class="muted">Nothing is uploaded: files are read by this page on your computer.</p>${HOW_TO}`;
+      return;
+    }
     const cs = model.concepts.filter(c => !c.builtin && c.declared);
     const rels = cs.reduce((n, c) => n + c.relationships.length, 0);
     details.innerHTML = `<h2>${esc(model.name)}</h2>
@@ -846,13 +882,7 @@ const OssieOntology = (() => {
       <tr><td>Relationships</td><td><b>${rels}</b></td></tr></table>
       ${model.requires.length ? `<h3>Ontology constraints</h3>${exprs(model.requires)}` : ""}
       <h3>Entity types</h3><ul>${cs.filter(isEntity).map(c => `<li>${link(c.name)}${c.description ? ` <span class="muted">— ${esc(c.description)}</span>` : ""}</li>`).join("")}</ul>
-      <h3>How to use</h3><ul class="muted">
-        <li>Click a concept (or any concept link) to see its relationships.</li>
-        <li>Drag nodes to pin them; double-click to unpin. Drag the background to pan, scroll to zoom.</li>
-        <li>Your arrangement is saved in this browser automatically. The <b>Layout</b> menu saves it to a file you can share or pass to <code>visualize.py --layout</code>, loads one, or resets it.</li>
-        <li><b>Open ontology…</b> (or drop a file on the page) shows another ontology <code>.yaml</code> without regenerating this page. In Edge and Chrome it updates whenever you save the file.</li>
-        <li>Toggle <b>Value types</b> to draw value types and <code>extends</code> hierarchies as nodes.</li>
-        <li>Hover an edge to read its verbalization.</li></ul>`;
+      ${HOW_TO}`;
   }
   function showConcept(name) {
     const c = byName.get(name);
@@ -957,12 +987,17 @@ const OssieOntology = (() => {
     clearTimeout(statusTimer);
     if (!sticky) statusTimer = setTimeout(() => { s.textContent = ""; s.classList.remove("error"); }, 4000);
   }
+  function reportError(what, e) {
+    console.error(e);
+    setStatus(`${what}: ${e && e.message || e}`, { error: true, sticky: true });
+  }
+  // Safety net: show any unexpected failure instead of silently doing nothing.
+  addEventListener("unhandledrejection", ev => reportError("Something went wrong", ev.reason));
+  addEventListener("error", ev => reportError("Something went wrong", ev.error || ev.message));
 
   // ---------- saving and restoring layouts ----------
   // Positions are kept per ontology name in localStorage and can be exported/imported as JSON.
-  // A layout passed to visualize.py --layout is embedded in the page; the newer of the two wins.
   let layoutDirty = false;
-  const pageLayout = () => model.name === builtinModel.name ? embeddedLayout : null;
   function readStoredLayout() {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; }
   }
@@ -994,17 +1029,16 @@ const OssieOntology = (() => {
     if (placed) { rebuild(0); alpha = 0; } else rebuild(400);
     fit();
   }
-  // Restores the browser-saved or built-in layout for the current ontology; true if browser-saved.
+  // Restores the browser-saved layout for the current ontology, if any; true when one was restored.
   function initialLayout() {
-    const stored = readStoredLayout(), built = pageLayout();
-    const useStored = !!(stored && stored.nodes &&
-      (!built || String(stored.saved_at || "") >= String(built.saved_at || "")));
-    const doc = useStored ? stored : built;
-    if (doc) applyLayout(doc);
+    const stored = model === EMPTY ? null : readStoredLayout();
+    const useStored = !!(stored && stored.nodes);
+    if (useStored) applyLayout(stored);
     startLayout();
     return useStored;
   }
   async function loadLayoutFile(file) {
+    if (model === EMPTY) return setStatus("Open an ontology before loading a layout", { error: true });
     let doc;
     try { doc = JSON.parse(await file.text()); } catch { return setStatus(file.name + " is not valid JSON", { error: true }); }
     if (!doc || typeof doc.nodes !== "object") return setStatus(file.name + " has no 'nodes' positions", { error: true });
@@ -1016,6 +1050,7 @@ const OssieOntology = (() => {
   }
 
   $("saveLayout").addEventListener("click", () => {
+    if (model === EMPTY) return setStatus("Open an ontology first", { error: true });
     const blob = new Blob([JSON.stringify(layoutDocument(), null, 2) + "\n"], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -1031,13 +1066,12 @@ const OssieOntology = (() => {
     if (file) loadLayoutFile(file);
   });
   $("relayout").addEventListener("click", () => {
+    if (model === EMPTY) return setStatus("Open an ontology first", { error: true });
     try { localStorage.removeItem(STORAGE_KEY); } catch { /* storage unavailable */ }
     layoutDirty = false;
     clearPositions();
-    const built = pageLayout();
-    if (built) applyLayout(built);
     startLayout();
-    setStatus(built ? "Reset to the layout built into this page" : "Reset to the automatic layout");
+    setStatus("Reset to the automatic layout");
   });
 
   // ---------- Layout menu ----------
@@ -1067,27 +1101,29 @@ const OssieOntology = (() => {
   document.addEventListener("pointerdown", ev => { if (!$("layoutMenu").contains(ev.target)) closeMenu(); }, true);
 
   // ---------- opening ontology files ----------
-  // An opened file replaces the built-in ontology without regenerating the page. With the File
-  // System Access API (Edge, Chrome) the page keeps a handle to the file and re-reads it whenever
-  // it changes. The last opened file survives a reload of this tab (sessionStorage + IndexedDB).
-  const OPENED_KEY = "ossie-ontology-opened:" + builtinModel.name;
-  const canPickFiles = typeof window.showOpenFilePicker === "function";
-  let current = { name: builtinModel.source, opened: false, handle: null };
+  // Ontologies are read from files the user opens or drops. With the File System Access API
+  // (Edge, Chrome) the page keeps a handle to the file and re-reads it whenever it changes. The
+  // last opened file is remembered (localStorage + IndexedDB) and reopened on the next visit.
+  const OPENED_KEY = "ossie-ontology-viewer:last-opened";
+  // Editors' built-in browsers (VS Code is Electron) show the picker's dialog but don't reliably
+  // hand the chosen file back, so they use a plain file input: no live updates, but it works.
+  const isElectron = /\bElectron\//.test(navigator.userAgent);
+  const canPickFiles = typeof window.showOpenFilePicker === "function" && !isElectron;
+  let current = { name: null, handle: null };
   let watcher = null;
 
   function sourceSummary() {
     if (!current.name) return "";
-    if (!current.opened) return `<p class="muted">Built from <code>${esc(current.name)}</code>.</p>`;
     return `<p class="muted">Opened from <code>${esc(current.name)}</code>${watcher ? "; updates when the file is saved" : ""}.</p>`;
   }
   function renderSource() {
     const s = $("source");
-    s.hidden = !current.opened;
-    if (!current.opened) { s.textContent = ""; return; }
+    s.hidden = !current.name;
+    if (!current.name) { s.textContent = ""; return; }
     s.innerHTML = `<span>📄 ${esc(current.name)}</span>`
       + (watcher ? `<span class="live" title="Reloads automatically when the file is saved">live</span>` : "")
       + (!watcher && current.handle ? `<button id="resumeWatch" title="Allow this page to read the file again">Resume live updates</button>` : "")
-      + `<button id="closeOpened" title="Go back to the ontology built into this page" aria-label="Close ${esc(current.name)}">✕</button>`;
+      + `<button id="closeOpened" title="Close this ontology" aria-label="Close ${esc(current.name)}">✕</button>`;
     if (!state.selected) showSummary();
   }
   $("source").addEventListener("click", ev => {
@@ -1096,8 +1132,10 @@ const OssieOntology = (() => {
   });
 
   // Swap in a new model. Positions carry over when it is the same ontology (e.g. a reload).
+  // Returns true when a layout saved in this browser was restored.
   function showOntology(m) {
     const same = m.name === model.name;
+    let restored = false;
     savePositions();
     if (!same) { clearPositions(); layoutDirty = false; }
     setModel(m);
@@ -1105,19 +1143,20 @@ const OssieOntology = (() => {
       const unplaced = model.concepts.filter(visible).some(c => !positions.has(c.name));
       rebuild(0);
       if (unplaced) reheat(0.4);
-    } else initialLayout();
+    } else restored = initialLayout();
     select(state.selected && byName.has(state.selected) ? state.selected : null);
+    return restored;
   }
   function parseOntology(text, name) {
     try { return OssieOntology.fromText(text, name); }
     catch (e) { throw new Error(`Could not read ${name}: ${e.message}`); }
   }
   function remember(name, text, handle) {
-    try { sessionStorage.setItem(OPENED_KEY, JSON.stringify({ name, text })); } catch { /* storage unavailable */ }
+    try { localStorage.setItem(OPENED_KEY, JSON.stringify({ name, text })); } catch { /* storage unavailable */ }
     idbPut(OPENED_KEY, handle);
   }
   function forget() {
-    try { sessionStorage.removeItem(OPENED_KEY); } catch { /* storage unavailable */ }
+    try { localStorage.removeItem(OPENED_KEY); } catch { /* storage unavailable */ }
     idbPut(OPENED_KEY, null);
   }
   async function openFile(file, handle = null) {
@@ -1126,12 +1165,13 @@ const OssieOntology = (() => {
     try { m = parseOntology(text, file.name); }
     catch (e) { setStatus(e.message, { error: true, sticky: true }); return false; }
     stopWatching();
-    current = { name: file.name, opened: true, handle };
-    showOntology(m);
+    current = { name: file.name, handle };
+    const restored = showOntology(m);
     remember(file.name, text, handle);
     if (handle) startWatching(handle, file.lastModified);
     renderSource();
-    setStatus(`Opened ${file.name}` + (handle ? "; it updates whenever you save the file" : ""));
+    setStatus(`Opened ${file.name}` + (handle ? "; it updates whenever you save the file" : "") +
+      (restored ? " (restored your saved layout)" : ""));
     return true;
   }
   function startWatching(handle, lastModified) {
@@ -1164,13 +1204,14 @@ const OssieOntology = (() => {
     watcher = null;
   }
   function closeOpened() {
+    const name = current.name;
     stopWatching();
     forget();
-    current = { name: builtinModel.source, opened: false, handle: null };
-    showOntology(builtinModel);
+    current = { name: null, handle: null };
+    showOntology(EMPTY);
     renderSource();
     showSummary();
-    setStatus("Showing the ontology built into this page");
+    if (name) setStatus(`Closed ${name}`);
   }
   async function resumeWatching() {
     const handle = current.handle;
@@ -1181,25 +1222,27 @@ const OssieOntology = (() => {
       await openFile(await handle.getFile(), handle);
     } catch (e) { setStatus(`Could not read ${current.name}: ${e.message}`, { error: true, sticky: true }); }
   }
+  // Reopen the last ontology: fresh from its file when the browser still allows reading it,
+  // otherwise from the copy saved when it was last opened.
   async function restoreOpened() {
     let saved = null;
-    try { saved = JSON.parse(sessionStorage.getItem(OPENED_KEY)); } catch { /* storage unavailable */ }
+    try { saved = JSON.parse(localStorage.getItem(OPENED_KEY)); } catch { /* storage unavailable */ }
     if (!saved || typeof saved.text !== "string") return;
     const handle = await idbGet(OPENED_KEY);
     try {
       if (handle && (await handle.queryPermission({ mode: "read" })) === "granted" &&
           await openFile(await handle.getFile(), handle)) return;
-    } catch { /* fall back to the saved text */ }
+    } catch { /* fall back to the saved copy */ }
     let m;
     try { m = parseOntology(saved.text, saved.name); } catch { return; }
-    current = { name: saved.name, opened: true, handle: handle || null };
+    current = { name: saved.name, handle: handle || null };
     showOntology(m);
     renderSource();
-    setStatus(`Showing ${saved.name} as it was before the page reloaded` +
-      (handle ? "; click Resume live updates to follow changes" : ""));
+    setStatus(`Reopened ${saved.name} from your last visit` +
+      (handle ? "; click Resume live updates to follow changes to the file" : ""));
   }
 
-  $("openOntology").addEventListener("click", async () => {
+  async function chooseOntologyFile() {
     if (!canPickFiles) return $("ontologyFile").click();
     let handle;
     try {
@@ -1209,12 +1252,15 @@ const OssieOntology = (() => {
       if (e.name !== "AbortError") $("ontologyFile").click();
       return;
     }
-    await openFile(await handle.getFile(), handle);
-  });
+    try { await openFile(await handle.getFile(), handle); }
+    catch (e) { reportError(`Could not open ${handle.name || "the file"}`, e); }
+  }
+  $("openOntology").addEventListener("click", chooseOntologyFile);
+  $("emptyOpen").addEventListener("click", chooseOntologyFile);
   $("ontologyFile").addEventListener("change", ev => {
     const file = ev.target.files[0];
     ev.target.value = "";
-    if (file) openFile(file);
+    if (file) openFile(file).catch(e => reportError(`Could not open ${file.name}`, e));
   });
 
   // Drop an ontology (or a .layout.json file) anywhere on the page.
@@ -1233,7 +1279,7 @@ const OssieOntology = (() => {
     const item = [...ev.dataTransfer.items].find(it => it.kind === "file");
     if (!item) return;
     // getAsFileSystemHandle() must be called synchronously, before the drop event finishes.
-    const pendingHandle = item.getAsFileSystemHandle ? item.getAsFileSystemHandle() : null;
+    const pendingHandle = canPickFiles && item.getAsFileSystemHandle ? item.getAsFileSystemHandle() : null;
     const file = item.getAsFile();
     let handle = null;
     try { handle = pendingHandle ? await pendingHandle : null; } catch { /* not available */ }
@@ -1243,10 +1289,10 @@ const OssieOntology = (() => {
         if (JSON.parse(await file.text())?.format === "ossie-ontology-layout") return loadLayoutFile(file);
       } catch { /* not JSON: let openFile report it */ }
     }
-    openFile(file, handle);
+    openFile(file, handle).catch(e => reportError(`Could not open ${file.name}`, e));
   });
 
-  // File handles can't go in sessionStorage, so they are kept in IndexedDB.
+  // File handles can't go in localStorage, so they are kept in IndexedDB.
   function idb(mode, action) {
     return new Promise(resolve => {
       let open;
@@ -1266,7 +1312,7 @@ const OssieOntology = (() => {
   const idbGet = key => idb("readonly", store => store.get(key));
   const idbPut = (key, value) => idb("readwrite", store => value ? store.put(value, key) : store.delete(key));
 
-  $("showValues").addEventListener("change", ev => { state.showValues = ev.target.checked; rebuild(0); reheat(0.6); });
+  $("showValues").addEventListener("change", ev => { state.showValues = ev.target.checked; syncBuiltinsToggle(); rebuild(0); reheat(0.6); });
   $("showBuiltins").addEventListener("change", ev => { state.showBuiltins = ev.target.checked; if (state.showValues) { rebuild(0); reheat(0.5); } });
   $("showLabels").addEventListener("change", ev => svg.classList.toggle("hide-labels", !ev.target.checked));
   $("fit").addEventListener("click", fit);
@@ -1279,15 +1325,14 @@ const OssieOntology = (() => {
   });
   window.addEventListener("resize", fit);
 
-  const restoredLayout = initialLayout();
+  startLayout();
   showSummary();
-  savePositions();
-  if (restoredLayout) setStatus("Restored your saved layout");
-  restoreOpened();
   // Small scripting hook, used by the tests and handy for automation.
   window.ossieViewer = {
     openText: (text, name = "ontology.yaml") => openFile(new File([text], name)),
     openHandle: handle => handle.getFile().then(file => openFile(file, handle)),
+    close: closeOpened,
+    ready: restoreOpened(),
     get model() { return model; },
   };
 })();
