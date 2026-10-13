@@ -27,7 +27,7 @@ build or run, and it works offline.
 
 1. Open `ontology-viewer.html` in a browser, for example by double-clicking it. You can also copy
    the file anywhere or send it to someone; it doesn't need the rest of the repository.
-2. Click **Open ontology…** and pick an ontology `.yaml` or `.json` file, such as
+2. Click **Open ontology…** and pick an ontology `.yaml`, `.yml` or `.json` file, such as
    [`examples/flights.ontology.yaml`](../../examples/flights.ontology.yaml). You can also drop the
    file onto the page.
 
@@ -40,7 +40,8 @@ Files are read by the page on your computer and never uploaded.
 - If you save the file while it is broken (for example half-typed YAML), the error appears in red
   with its line number. The last good version stays on screen until you fix it.
 
-**Other browsers** (Firefox, Safari) read the file once. Open it again to see later changes.
+**Other browsers** (including Firefox, Safari, and VS Code's built-in browser) read the file once.
+Open it again to see later changes.
 
 **Coming back later:**
 - The page reopens the last ontology you opened.
@@ -82,17 +83,3 @@ The page reads YAML itself, without libraries. It supports what Ossie documents 
 - comments.
 
 Anchors (`&`/`*`), tags (`!`) and multiple documents in one file are reported as errors.
-
-## Tests
-
-```bash
-uv run --with pytest --with pyyaml -m pytest ontology/visualize/tests
-```
-
-The tests run the page in headless Chrome, Edge or Chromium. They check:
-- the YAML reader against PyYAML, using the example files and edge cases;
-- how the page interprets ontology documents;
-- the user interface, including opening, live updates, closing, the Layout menu and toggles.
-
-They are skipped when no browser is found. Set `OSSIE_TEST_BROWSER` to the browser executable to
-choose one.
