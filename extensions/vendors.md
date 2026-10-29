@@ -32,6 +32,9 @@ custom_extensions:
 carries but does not interpret. This is a registry of `vendor_name` tokens the
 community uses (see [`README.md`](README.md) for how these lists are used).
 
+`data` was previously a JSON-encoded string. To migrate, parse that string
+into an object; see [Migrating from string `data`](../core-spec/spec.md#migrating-from-string-data).
+
 ## Known vendors
 
 | Vendor | Description |
