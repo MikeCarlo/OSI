@@ -18,6 +18,7 @@
 from collections.abc import Callable
 
 import pytest
+import yaml
 from pydantic import ValidationError
 
 from ossie import (
@@ -306,3 +307,14 @@ def test_frozen_semantic_model() -> None:
     )
     with pytest.raises(ValidationError):
         semantic_model.name = "other"
+
+
+def test_custom_extension_data_serializes_yaml_dates_as_json_strings() -> None:
+    data = yaml.safe_load("released: 2026-10-29")
+    custom_ext = OssieCustomExtension(vendor_name="ASF", data=data)
+    assert custom_ext.model_dump(mode="json")["data"] == {"released": "2026-10-29"}
+
+
+def test_custom_extension_rejects_non_string_data_keys() -> None:
+    with pytest.raises(ValidationError):
+        OssieCustomExtension(vendor_name="ASF", data=yaml.safe_load("1: one"))
