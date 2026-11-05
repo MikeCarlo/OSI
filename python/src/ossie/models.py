@@ -99,8 +99,16 @@ def _invalid_below(
                 if not legal_null:
                     found.append((where, _NULL))
             else:
+                # Null is legal inside custom_extensions data. The data property
+                # itself stays required; only values under that object may be null.
+                # A non-finite number is still rejected, including there.
                 found += _invalid_below(
-                    value, where, inner, walked, legal_null, key == "ai_context"
+                    value,
+                    where,
+                    inner,
+                    walked,
+                    legal_null or key == "data",
+                    key == "ai_context",
                 )
     else:
         for index, item in enumerate(node):
@@ -403,8 +411,10 @@ class OssieDocument(OssieSemanticModel):
         and not to the models.
 
         Rejected here: a duplicate mapping key, a property set to null, a missing
-        ``version``, a non-finite number, and a cyclic alias. YAML merge overrides
-        remain supported. The field types reject the rest of the schema.
+        ``version``, a non-finite number, and a cyclic alias. A null inside
+        ``custom_extensions`` ``data`` is kept; that object is vendor-defined JSON.
+        YAML merge overrides remain supported. The field types reject the rest of
+        the schema.
 
         A diagnostic lists at most :data:`_MAX_REPORTED` paths and counts the rest, so
         fixing the ones named can reveal more on the next run.

@@ -21,6 +21,7 @@ import os
 import re
 import sys
 import urllib.request
+from datetime import date, datetime, timezone
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
@@ -436,6 +437,165 @@ def test_custom_extension_data_rejects_non_objects(
     assert "is not of type 'object'" in errors[0]
 
 
+def _extension_document() -> dict:
+    document = _document(
+        [dict(_ORDERS, metrics=[_metric("order_count", "COUNT(customer_id)")]), _CUSTOMERS],
+        [_relationship(["id"])],
+    )
+    document["metrics"] = [_metric("customer_count", "COUNT(customers.id)")]
+    return document
+
+
+_EXTENSION_ERROR_PREFIX = {
+    "model": "",
+    "dataset": "datasets -> 0 -> ",
+    "field": "datasets -> 0 -> fields -> 0 -> ",
+    "dataset_metric": "datasets -> 0 -> metrics -> 0 -> ",
+    "metric": "metrics -> 0 -> ",
+    "relationship": "relationships -> 0 -> ",
+}
+
+
+@pytest.mark.parametrize("location", list(_EXTENSION_LOCATIONS))
+def test_extension_data_rejects_dates_and_non_finite_floats(
+    core_schema: dict, location: str
+) -> None:
+    # The schema types data as object and does not look inside, so these values
+    # pass validate_schema. validate_document rejects them as schema errors.
+    document = _extension_document()
+    _EXTENSION_LOCATIONS[location](document)["custom_extensions"] = [
+        {
+            "vendor_name": "DB_VENDOR",
+            "data": {
+                "released": date(2024, 1, 1),
+                "ratio": float("inf"),
+                "nested": {"when": datetime(2024, 1, 1, tzinfo=timezone.utc)},
+                "missing": float("nan"),
+            },
+        }
+    ]
+
+    assert _VALIDATE.validate_schema(document, core_schema) == []
+    errors = [
+        error
+        for error in _VALIDATE.validate_document(document, core_schema)
+        if not isinstance(error, _VALIDATE.ValidationWarning)
+    ]
+    prefix = (
+        f"[Schema] {_EXTENSION_ERROR_PREFIX[location]}custom_extensions -> 0 -> data"
+    )
+    assert errors == [
+        f"{prefix} -> released: date is not a JSON value",
+        f"{prefix} -> ratio: non-finite float is not a JSON value",
+        f"{prefix} -> nested -> when: timestamp is not a JSON value",
+        f"{prefix} -> missing: non-finite float is not a JSON value",
+    ]
+
+
+def test_extension_data_rejects_non_string_keys(core_schema: dict) -> None:
+    document = _document([_ORDERS], [])
+    document["custom_extensions"] = [{"vendor_name": "DB_VENDOR", "data": {1: "one"}}]
+
+    errors = [
+        error
+        for error in _VALIDATE.validate_document(document, core_schema)
+        if not isinstance(error, _VALIDATE.ValidationWarning)
+    ]
+
+    assert errors == ["[Schema] custom_extensions -> 0 -> data -> 1: key is not a string"]
+
+
+def test_extension_data_accepts_retyped_yaml_scalars_that_are_valid_json(
+    core_schema: dict,
+) -> None:
+    # Residual cost of object data: these load as JSON booleans or integers
+    # (or, for 1e3, stay a string under this project's PyYAML) and are not
+    # rejected. The check catches JSON-breakers only.
+    document = _VALIDATE.load_yaml_named(
+        """
+version: 0.2.0.dev0
+name: m
+datasets:
+  - name: orders
+    source: db.s.orders
+    custom_extensions:
+      - vendor_name: DB_VENDOR
+        data:
+          yes_flag: yes
+          no_flag: NO
+          truth: true
+          falsehood: false
+          octal: 010
+          scientific: 1e3
+          quoted_date: "2024-01-01"
+""",
+        "model.yaml",
+    )
+    payload = document["datasets"][0]["custom_extensions"][0]["data"]
+    assert payload == {
+        "yes_flag": True,
+        "no_flag": False,
+        "truth": True,
+        "falsehood": False,
+        "octal": 8,
+        "scientific": "1e3",
+        "quoted_date": "2024-01-01",
+    }
+    assert _VALIDATE.validate_document(document, core_schema) == []
+
+
+def test_custom_extension_data_schema_does_not_describe_keys(core_schema: dict) -> None:
+    # The core schema never references the structure under data.
+    extension = core_schema["$defs"]["CustomExtension"]
+    data_schema = extension["properties"]["data"]
+    assert data_schema["type"] == "object"
+    assert "properties" not in data_schema
+    assert "patternProperties" not in data_schema
+    assert "required" not in data_schema
+    assert "additionalProperties" not in data_schema
+    assert "if" not in extension
+    assert "dependentSchemas" not in extension
+    assert extension["properties"].keys() == {"vendor_name", "data"}
+
+
+def test_cli_rejects_unquoted_yaml_date_before_semantic_checks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # A duplicate dataset name would be a semantic error. The date is a schema
+    # error, so semantic checks do not run.
+    model_path = tmp_path / "model.yaml"
+    model_path.write_text(
+        """
+version: 0.2.0.dev0
+name: m
+datasets:
+  - name: orders
+    source: db.s.orders
+  - name: orders
+    source: db.s.orders
+custom_extensions:
+  - vendor_name: DB_VENDOR
+    data:
+      released: 2024-01-01
+      ratio: .inf
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(sys, "argv", ["validate.py", str(model_path)])
+
+    with pytest.raises(SystemExit) as raised:
+        _VALIDATE.main()
+
+    output = capsys.readouterr().out
+    assert raised.value.code == 1
+    assert "[Schema] custom_extensions -> 0 -> data -> released: date is not a JSON value" in output
+    assert "[Schema] custom_extensions -> 0 -> data -> ratio: non-finite float is not a JSON value" in output
+    assert "Semantic checks skipped until schema errors are fixed." in output
+    assert "[Unique]" not in output
+
+
 def test_sql_checks_traverse_root_fields_and_metrics(monkeypatch: pytest.MonkeyPatch) -> None:
     seen = []
 
@@ -704,7 +864,7 @@ def test_schema_rejects_empty_dialect_expression(core_schema: dict) -> None:
 
 def test_schema_rejects_empty_vendor_name(core_schema: dict) -> None:
     # `vendor_name` requires minLength 1.
-    dataset = {**_ORDERS, "custom_extensions": [{"vendor_name": "", "data": "{}"}]}
+    dataset = {**_ORDERS, "custom_extensions": [{"vendor_name": "", "data": {}}]}
 
     assert _VALIDATE.validate_schema(_document([dataset], []), core_schema) == [
         "[Schema] datasets -> 0 -> custom_extensions -> 0 -> vendor_name: "

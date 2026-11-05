@@ -110,6 +110,16 @@ def test_custom_extension_data_round_trips_nested_values(document_data: dict) ->
     assert from_json["custom_extensions"][0]["data"] == data
 
 
+def test_from_ossie_yaml_preserves_null_inside_extension_data(document_data: dict) -> None:
+    document_data["custom_extensions"] = [
+        {"vendor_name": "DB_VENDOR", "data": {"unset": None, "nested": {"inner": None}}}
+    ]
+
+    document = OssieDocument.from_ossie_yaml(yaml.safe_dump(document_data))
+
+    assert document.custom_extensions[0].data == {"unset": None, "nested": {"inner": None}}
+
+
 def test_to_ossie_yaml_excludes_none(document_data: dict) -> None:
     document = OssieDocument.model_validate(document_data)
     output = document.to_ossie_yaml()
@@ -309,7 +319,7 @@ def _fully_populated_document() -> dict:
         "dialects": [{"dialect": "ANSI_SQL", "expression": "amount"}],
     }
     ai_context = {"instructions": "i", "synonyms": ["s"], "examples": ["e"]}
-    extensions = [{"vendor_name": "DB_VENDOR", "data": "{}"}]
+    extensions = [{"vendor_name": "DB_VENDOR", "data": {}}]
     return {
         "version": "0.2.0.dev0",
         "name": "m",

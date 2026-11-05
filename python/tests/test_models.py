@@ -446,7 +446,7 @@ def test_relationship_rejects_unknown_fields(document_data: dict) -> None:
 
 def test_custom_extension_rejects_unknown_fields(document_data: dict) -> None:
     document_data["custom_extensions"] = [
-        {"vendor_name": "DBT", "data": "{}", "datta": "typo"}
+        {"vendor_name": "DBT", "data": {}, "datta": "typo"}
     ]
 
     with pytest.raises(ValidationError) as error:
