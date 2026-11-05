@@ -563,19 +563,57 @@ custom_extensions:
 | `vendor_name` | string | Yes | Free-form identifier for the vendor or organization that owns the extension |
 | `data` | object | Yes | Vendor-specific key/value data. May be empty (`{}`) |
 
-The keys inside `data` are defined by the vendor; the core specification does not
-reserve or require any key. Values may be any JSON value: strings, numbers,
-booleans, `null`, arrays, or nested objects. Prefer an existing core field when a
-property already has a home in the specification, and use `data` only for genuine
-vendor-specific or otherwise unmapped residue.
+The keys inside `data` are defined by the vendor. The core schema never references
+the structure under `data`: it defines no reserved key and no common sub-key. Keys
+under `data` remain entirely vendor-defined. Vendor schemas live outside core-spec.
+A vendor schema describes that vendor's payload structure, not portable Ossie
+semantics.
 
-`data` MUST be representable as JSON: keys are strings and values are JSON values.
-YAML-only values have no portable meaning; for example, an unquoted YAML date such as
-`2026-10-29` is written out as the JSON string `"2026-10-29"`, and a non-string key
-is rejected. A `null` inside `data` is preserved as written, unlike optional core
-fields, which are omitted when they are `null`.
+Values may be any JSON value: strings, numbers, booleans, `null`, arrays, or nested
+objects. A `null` inside `data` is preserved as written, unlike optional core fields,
+which are omitted when they are `null`.
+
+### Portability
+
+Extensions preserve vendor-specific state for lossless round-trips while the core
+grows. They are not a second specification.
+
+1. Core semantics MUST NOT depend on extensions. The core specification, the schema,
+   and compliance tests define and validate portable behavior independently of
+   extension contents.
+2. Behavior defined only through extensions is non-portable and MUST NOT be presented
+   as portable Ossie behavior.
+3. Producers SHOULD use core constructs wherever they can express the intended
+   semantics, rather than duplicating those concepts in extensions.
 
 Consumers MUST preserve `data` they do not understand and MAY ignore it.
+
+### JSON representability
+
+`data` MUST be representable as JSON. Keys are strings. Values are JSON values.
+
+Producers write `data` through a dumper that quotes defensively, or quote any scalar
+YAML would otherwise read as a boolean, a number, or a date. Loaders do not agree on
+unquoted scalars, and a hand-edited document is exposed to all of them:
+
+| Written | What a loader may produce |
+|---------|---------------------------|
+| `yes`, `NO` | a boolean, or the string that was written |
+| `true`, `false` | a boolean in YAML 1.1 and YAML 1.2 |
+| `010` | the integer 8, or the integer 10 |
+| `1e3` | the number 1000, or the string `1e3` |
+| `2024-01-01` | a date, not the string `2024-01-01` |
+
+`validation/validate.py` rejects a value under `data` that is not a JSON value. A
+date or timestamp object is rejected. A non-finite float (`NaN`, infinity) is
+rejected. A non-string key is rejected. Those are schema errors, the same level as
+a `data` value that is not an object.
+
+That check does not catch every YAML surprise. `yes`, `NO`, `true`, `false`, `010`,
+and `1e3` can load as a boolean or an integer that is valid JSON and is simply not
+the text that was written. The check catches the values that break JSON. It cannot
+catch this silent retyping. A validator that catches the loud half is not a complete
+check of what was written. Quote the scalar when the characters matter.
 
 ### Migrating from string `data`
 
@@ -851,6 +889,7 @@ ai_context:
 ## Version History
 
 - **0.2.0.dev0** (Unreleased): In-development next minor release. Schema is mutable; do not depend on this version in production.
+  - Breaking: `custom_extensions[].data` is an object of vendor-defined keys, not a JSON-encoded string. A string `data` value is rejected. Values must be JSON-representable; a date, a timestamp, or a non-finite float under `data` is a schema error. See [Custom Extensions](#custom-extensions).
   - Breaking: each standalone document contains one model directly at the root; the `semantic_model` array is removed.
   - Breaking: metric expressions, `primary_key`, `unique_keys`, and relationship `from_columns`/`to_columns` refer to dataset fields, not columns of the dataset's `source`. Model-scoped metric expressions must use qualified `dataset.field` references; dataset-scoped metric expressions use unqualified field names. Earlier versions did not specify this, and some converters read these names as source columns; those converters must now resolve them as fields. See [Name Resolution](#name-resolution).
   - Dataset-scoped metric expressions may reference columns of the dataset's `source`, written as `source.column`. See [Metric Scoping](#metric-scoping).

@@ -56,7 +56,7 @@ The Ossie core specification (current version: **0.2.0.dev0**, latest released: 
 | **Fields** | Row-level attributes for grouping, filtering, and metric expressions. Fields support multiple SQL dialects for cross-platform compatibility. |
 | **Relationships** | Foreign key connections between datasets, supporting both simple and composite keys. |
 | **Metrics** | Quantitative measures (sums, averages, ratios, etc.). A model-scoped metric's expression may combine fields from several datasets; a dataset-scoped metric aggregates one dataset's own fields at its row level. |
-| **Custom Extensions** | Vendor-specific metadata stored as JSON, allowing platforms to carry additional information without breaking core compatibility. |
+| **Custom Extensions** | Vendor-specific metadata stored as an object with vendor-defined keys. Core semantics do not depend on it, and behavior defined only there is non-portable. |
 | **AI Context** | Optional annotations at every level (model, dataset, field, relationship, metric) to help AI tools understand business meaning — including instructions, synonyms, and example queries. |
 
 An expression carries a primary, portable form in `OSSIE_SQL_2026` and may also carry vendor-specific variants. The `dialect` label is a free-form string, so expressions can be tailored to any platform while maintaining a common model structure.
@@ -238,7 +238,7 @@ Use the [validation script](../validation/validate.py) included in the repositor
 YAML is more human-readable and easier to author by hand, which is important for a specification that teams may edit directly. The Ossie JSON Schema is available for programmatic validation, and converters can work with either format.
 
 **How does Ossie handle vendor-specific features?**
-Through `custom_extensions`. Each vendor can store structured metadata (any keys and nested values it chooses) in extension blocks tagged with their vendor name. This metadata is preserved during round-trip conversions and ignored by tools that don't understand it — ensuring that no information is lost.
+Through `custom_extensions`. Each vendor can store structured metadata (any keys and nested values it chooses) in extension blocks tagged with their vendor name. The core schema does not describe those keys. This metadata is preserved during round-trip conversions and ignored by tools that don't understand it, so no information is lost. Behavior that exists only in an extension is non-portable and is not Ossie core behavior. Producers should use a core construct whenever the core can express the meaning. Values under `data` must be JSON. Quote scalars such as `yes`, `true`, `010`, `1e3`, and dates; the validator rejects dates and non-finite floats, and it cannot catch a boolean or integer that is valid JSON but not the text that was written.
 
 **Can metrics reference multiple datasets?**
 In the expression, only a model-scoped metric can — it uses multi-part `dataset.field` references and combines datasets. A dataset-scoped metric's expression stays within its own dataset. See [Metric Scoping](https://github.com/apache/ossie/blob/main/core-spec/spec.md#metric-scoping).
@@ -268,7 +268,7 @@ The community is committed to minimizing breaking changes. When backward-incompa
 
 ### Extension Compatibility
 
-Custom extensions (`custom_extensions`) are explicitly outside the scope of core compatibility guarantees. Vendors are responsible for maintaining compatibility within their own extension schemas. However, the core specification guarantees that `custom_extensions` blocks are always preserved during round-trip conversions, even by tools that do not understand them.
+Custom extensions (`custom_extensions`) are explicitly outside the scope of core compatibility guarantees. Core semantics do not depend on extension contents, and a vendor schema for `data` lives outside core-spec. Vendors are responsible for maintaining compatibility within their own extension schemas. However, the core specification guarantees that `custom_extensions` blocks are always preserved during round-trip conversions, even by tools that do not understand them.
 
 ---
 

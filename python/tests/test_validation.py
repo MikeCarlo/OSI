@@ -214,7 +214,7 @@ def test_dialect_expression_empty_expression_is_rejected() -> None:
 def test_custom_extension_empty_vendor_name_is_rejected() -> None:
     # `vendor_name` has min_length 1, matching the schema.
     with pytest.raises(ValidationError):
-        OssieCustomExtension(vendor_name="", data="{}")
+        OssieCustomExtension(vendor_name="", data={})
 
 
 def test_free_form_dialect_in_expression() -> None:
@@ -310,6 +310,8 @@ def test_frozen_semantic_model() -> None:
 
 
 def test_custom_extension_data_serializes_yaml_dates_as_json_strings() -> None:
+    # JSON mode stringifies a date on the model. validate.py rejects that value
+    # in a document; this does not make the date valid extension data.
     data = yaml.safe_load("released: 2026-10-29")
     custom_ext = OssieCustomExtension(vendor_name="ASF", data=data)
     assert custom_ext.model_dump(mode="json")["data"] == {"released": "2026-10-29"}

@@ -90,7 +90,7 @@ metrics: []
 # Allows vendors to add custom metadata without breaking core compatibility
 custom_extensions:
   - vendor_name: string  # Free-form string identifying the vendor
-    data: object  # Structured vendor-specific data; keys are vendor-defined
+    data: object  # Vendor-defined keys; core schema does not describe them. Values must be JSON.
 
 ---
 # Logical Dataset Schema
@@ -162,7 +162,7 @@ datasets:
     # Optional: Vendor-specific attributes for extensibility
     custom_extensions:
       - vendor_name: string  # Free-form string identifying the vendor
-        data: object  # Structured vendor-specific data; keys are vendor-defined
+        data: object  # Vendor-defined keys; core schema does not describe them. Values must be JSON.
 
 ---
 # Relationship Schema
@@ -205,7 +205,7 @@ relationships:
     # Optional: Vendor-specific attributes for extensibility
     custom_extensions:
       - vendor_name: string  # Free-form string identifying the vendor
-        data: object  # Structured vendor-specific data; keys are vendor-defined
+        data: object  # Vendor-defined keys; core schema does not describe them. Values must be JSON.
 
 ---
 # Fields Schema
@@ -263,7 +263,7 @@ fields:
     # Optional: Vendor-specific attributes for extensibility
     custom_extensions:
       - vendor_name: string  # Free-form string identifying the vendor
-        data: object  # Structured vendor-specific data; keys are vendor-defined
+        data: object  # Vendor-defined keys; core schema does not describe them. Values must be JSON.
 
 ---
 # Metrics Schema
@@ -311,4 +311,4 @@ metrics:
     # Optional: Vendor-specific attributes for extensibility
     custom_extensions:
       - vendor_name: string  # Free-form string identifying the vendor
-        data: object  # Structured vendor-specific data; keys are vendor-defined
+        data: object  # Vendor-defined keys; core schema does not describe them. Values must be JSON.
