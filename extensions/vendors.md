@@ -19,11 +19,11 @@
 
 # Vendor Extensions Catalog
 
-Custom extensions attach platform-specific metadata to a model (see
-[`core-spec/spec.md`](../core-spec/spec.md#custom-extensions)):
+Non-portable extensions attach platform-specific metadata to a model (see
+[`core-spec/spec.md`](../core-spec/spec.md#non-portable-extensions)):
 
 ```yaml
-custom_extensions:
+nonportable_extensions:
   - vendor_name: string  # Free-form string identifying the vendor
     data: object         # Structured object with vendor-defined keys
 ```

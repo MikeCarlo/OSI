@@ -99,8 +99,16 @@ def _invalid_below(
                 if not legal_null:
                     found.append((where, _NULL))
             else:
+                # Null is legal inside nonportable_extensions data. The data
+                # property itself stays required; only values under that object
+                # may be null. A non-finite number is still rejected.
                 found += _invalid_below(
-                    value, where, inner, walked, legal_null, key == "ai_context"
+                    value,
+                    where,
+                    inner,
+                    walked,
+                    legal_null or key == "data",
+                    key == "ai_context",
                 )
     else:
         for index, item in enumerate(node):
@@ -208,7 +216,7 @@ class OssieAIContextObject(BaseModel):
 OssieAIContext = Union[str, OssieAIContextObject]
 
 
-class OssieCustomExtension(BaseModel):
+class OssieNonportableExtension(BaseModel):
     """Vendor-specific metadata as a structured object with vendor-defined keys."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -267,7 +275,7 @@ class OssieField(BaseModel):
     description: Optional[str] = None
     datatype: Optional[OssieDataType] = None
     ai_context: Optional[OssieAIContext] = None
-    custom_extensions: Optional[list[OssieCustomExtension]] = None
+    nonportable_extensions: Optional[list[OssieNonportableExtension]] = None
 
     def is_time_dimension(self) -> bool:
         """Return the field's effective temporal-dimension role.
@@ -293,7 +301,7 @@ class OssieMetric(BaseModel):
     description: Optional[str] = None
     datatype: Optional[OssieDataType] = None
     ai_context: Optional[OssieAIContext] = None
-    custom_extensions: Optional[list[OssieCustomExtension]] = None
+    nonportable_extensions: Optional[list[OssieNonportableExtension]] = None
 
 
 class OssieDataset(BaseModel):
@@ -314,7 +322,7 @@ class OssieDataset(BaseModel):
     fields: Optional[list[OssieField]] = None
     # Dataset-scoped: expressions reference this dataset's declared fields by single-part (unqualified) name.
     metrics: Optional[list[OssieMetric]] = None
-    custom_extensions: Optional[list[OssieCustomExtension]] = None
+    nonportable_extensions: Optional[list[OssieNonportableExtension]] = None
 
 
 class OssieRelationship(BaseModel):
@@ -328,7 +336,7 @@ class OssieRelationship(BaseModel):
     from_columns: list[str] = Field(..., min_length=1)
     to_columns: list[str] = Field(..., min_length=1)
     ai_context: Optional[OssieAIContext] = None
-    custom_extensions: Optional[list[OssieCustomExtension]] = None
+    nonportable_extensions: Optional[list[OssieNonportableExtension]] = None
 
 
 class OssieSemanticModel(BaseModel):
@@ -343,7 +351,7 @@ class OssieSemanticModel(BaseModel):
     relationships: Optional[list[OssieRelationship]] = None
     # Model-scoped: expressions reference fields by multi-part name (dataset.field) and may span datasets.
     metrics: Optional[list[OssieMetric]] = None
-    custom_extensions: Optional[list[OssieCustomExtension]] = None
+    nonportable_extensions: Optional[list[OssieNonportableExtension]] = None
 
 
 class OssieDocument(OssieSemanticModel):
@@ -397,8 +405,10 @@ class OssieDocument(OssieSemanticModel):
         and not to the models.
 
         Rejected here: a duplicate mapping key, a property set to null, a missing
-        ``version``, a non-finite number, and a cyclic alias. YAML merge overrides
-        remain supported. The field types reject the rest of the schema.
+        ``version``, a non-finite number, and a cyclic alias. A null inside
+        ``nonportable_extensions`` ``data`` is kept; that object is vendor-defined
+        JSON. YAML merge overrides remain supported. The field types reject the
+        rest of the schema.
 
         A diagnostic lists at most :data:`_MAX_REPORTED` paths and counts the rest, so
         fixing the ones named can reveal more on the next run.
